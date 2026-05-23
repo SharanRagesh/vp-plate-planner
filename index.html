@@ -33,7 +33,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 #tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none}
 
 /* ── SCREEN SYSTEM ───────────────────────────────────────────────────────── */
-.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
+.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:transparent;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
 .screen.active{display:flex}
 .screen-inner{flex:1;display:flex;flex-direction:column;padding:calc(var(--safe-top) + 16px) 16px 0}
 
@@ -391,10 +391,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 <!-- ════════════════════════════════════════════════════════════════════════
      SCREEN: AR (active shooting)
 ════════════════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-ar">
-  <!-- AR screen is mostly transparent — camera shows through -->
-  <!-- Controls are in the fixed ar-top, ar-dist, ar-bottom divs -->
-  <div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none"></div>
+<div class="screen" id="screen-ar" style="background:transparent !important">
 </div>
 
 <script type="module">

@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VP Planner">
+<meta name="theme-color" content="#0A0C0F">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>VP Plate Planner</title>
+<style>
+/* ── RESET + TOKENS ──────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --plate:#3A9EE8; --crop:#00E5A0; --wall:#FF5C35; --talent:#A78BFA;
+  --safe:#30D158;  --tight:#FFD60A; --risky:#FF9500; --invalid:#FF3B30;
+  --bg:#0A0C0F; --bg2:#0F1218; --bg3:#161B24;
+  --border:rgba(255,255,255,0.09);
+  --text:#F0EDE8; --muted:rgba(240,237,232,0.45); --dim:rgba(240,237,232,0.2);
+  --accent:#3A9EE8;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
+  --mono:'SF Mono','Fira Mono',monospace;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:var(--font);color:var(--text)}
+
+/* ── LAYERS ──────────────────────────────────────────────────────────────── */
+#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+#ar-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+#tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none}
+
+/* ── SCREEN SYSTEM ───────────────────────────────────────────────────────── */
+.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
+.screen.active{display:flex}
+.screen-inner{flex:1;display:flex;flex-direction:column;padding:calc(var(--safe-top) + 16px) 16px 0}
+
+/* ── NAV BAR ─────────────────────────────────────────────────────────────── */
+.nav-bar{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-top) + 10px) 16px 10px;min-height:calc(var(--safe-top) + 52px);flex-shrink:0}
+.nav-title{font-size:17px;font-weight:600;letter-spacing:-0.01em}
+.nav-btn{font-size:15px;color:var(--accent);background:none;border:none;padding:6px 0;cursor:pointer;font-family:var(--font)}
+.nav-btn.right{text-align:right}
+
+/* ── TYPOGRAPHY ──────────────────────────────────────────────────────────── */
+.section-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:20px 0 8px}
+.page-title{font-size:28px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;margin-bottom:6px}
+.page-sub{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:24px}
+
+/* ── CARDS ───────────────────────────────────────────────────────────────── */
+.card{background:var(--bg3);border:0.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-label{font-size:15px;font-weight:500}
+.card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.card-meta{font-size:12px;color:var(--dim);font-family:var(--mono)}
+.card-badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;background:rgba(58,158,232,0.15);color:var(--accent)}
+.card-chevron{color:var(--dim);font-size:18px;flex-shrink:0}
+.card button{background:none;border:none;width:100%;text-align:left;cursor:pointer;color:inherit}
+
+/* ── FORM ELEMENTS ───────────────────────────────────────────────────────── */
+.form-group{margin-bottom:16px}
+.form-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block}
+.form-input{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none}
+.form-input:focus{border-color:var(--accent)}
+.form-select{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.btn{display:block;width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:500;font-family:var(--font);cursor:pointer;text-align:center;transition:opacity 0.15s}
+.btn:active{opacity:0.7}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--bg3);border:0.5px solid var(--border);color:var(--text)}
+.btn-danger{background:rgba(255,59,48,0.15);border:0.5px solid rgba(255,59,48,0.3);color:#FF3B30}
+.btn-sm{padding:9px 16px;font-size:14px;border-radius:10px;width:auto;display:inline-block}
+.btn-row{display:flex;gap:10px;margin-top:8px}
+.btn-row .btn{flex:1}
+
+/* ── AR UI ────────────────────────────────────────────────────────────────── */
+#ar-top{position:fixed;top:var(--safe-top);left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:flex-start;padding:8px 12px;gap:8px;pointer-events:none}
+.ar-pill{background:rgba(8,10,14,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted);pointer-events:all}
+.ar-pill strong{color:var(--accent)}
+.ar-legend{background:rgba(8,10,14,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 10px;display:flex;gap:8px;align-items:center}
+.leg{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+.leg-line{width:12px;height:2px;border-radius:1px}
+
+#ar-dist{position:fixed;z-index:10;left:12px;right:12px;display:flex;gap:8px}
+.dist-card{flex:1;background:rgba(8,10,14,0.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:0.5px solid var(--border);border-radius:12px;padding:7px 10px;text-align:center}
+.dist-val{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
+.dist-unit{font-size:9px;color:var(--muted);margin-left:1px}
+.dist-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
+
+/* ── CROSSHAIR ────────────────────────────────────────────────────────────── */
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:8;pointer-events:none;display:none}
+.ch-ring{width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.7);position:relative;display:flex;align-items:center;justify-content:center}
+.ch-dot{width:5px;height:5px;border-radius:50%;background:#fff;position:absolute}
+#tap-hint{position:fixed;top:calc(50% + 42px);left:50%;transform:translateX(-50%);z-index:8;background:rgba(8,10,14,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:0.5px solid var(--border);border-radius:20px;padding:6px 16px;font-size:12px;color:var(--muted);display:none;white-space:nowrap}
+
+/* ── BOTTOM AR PANEL ─────────────────────────────────────────────────────── */
+#ar-bottom{position:fixed;z-index:10;bottom:0;left:0;right:0}
+.ar-panel{background:rgba(8,10,14,0.9);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid var(--border);padding:10px 12px calc(var(--safe-bot) + 8px)}
+.lens-row{display:flex;gap:7px;margin-bottom:10px;justify-content:center}
+.lens-btn{flex:1;max-width:62px;padding:9px 0;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--muted);font-size:13px;font-weight:500;text-align:center;cursor:pointer;transition:all 0.15s;font-family:var(--font)}
+.lens-btn span{display:block;font-size:9px;opacity:0.7;margin-top:1px}
+.lens-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.action-row{display:flex;gap:7px;margin-bottom:10px}
+.ar-btn{flex:1;padding:9px 6px;border-radius:10px;border:0.5px solid var(--border);background:rgba(255,255,255,0.05);color:var(--muted);font-size:12px;font-weight:500;text-align:center;cursor:pointer;font-family:var(--font);letter-spacing:0.01em;transition:all 0.15s}
+.ar-btn.on{border-color:rgba(0,229,160,0.4);color:var(--crop)}
+.ar-btn.warn-btn{border-color:rgba(255,92,53,0.35);color:var(--wall)}
+.ar-metrics{display:flex;border-top:0.5px solid var(--border);padding-top:9px}
+.ar-metric{flex:1;text-align:center}
+.ar-metric-val{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1;margin-bottom:2px}
+.ar-metric-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+.ar-metric-sep{width:0.5px;background:var(--border);align-self:stretch}
+#ar-warn{display:none;background:rgba(255,92,53,0.12);border:0.5px solid rgba(255,92,53,0.4);border-radius:8px;padding:6px 12px;font-size:11px;color:#FF8A6E;margin-bottom:8px;text-align:center}
+
+/* ── MANUAL MODAL ─────────────────────────────────────────────────────────── */
+#manual-modal{position:fixed;inset:0;z-index:70;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.6)}
+.modal-sheet{background:#0F1318;border-radius:20px 20px 0 0;border:0.5px solid var(--border);padding:20px 16px calc(var(--safe-bot) + 20px);width:100%;max-width:480px}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.modal-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.modal-lbl{font-size:11px;color:var(--muted);min-width:110px;text-transform:uppercase;letter-spacing:0.04em}
+.modal-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+.modal-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+.modal-val{font-size:13px;font-weight:500;min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+
+/* ── SETUP MODAL ──────────────────────────────────────────────────────────── */
+#setup-modal{position:fixed;inset:0;z-index:70;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.6);overflow-y:auto}
+.setup-sheet{background:#0F1318;border-radius:20px 20px 0 0;border:0.5px solid var(--border);padding:20px 16px calc(var(--safe-bot) + 20px);width:100%;max-width:480px}
+
+/* ── FLASH ────────────────────────────────────────────────────────────────── */
+#flash{position:fixed;inset:0;z-index:100;background:#fff;opacity:0;pointer-events:none;transition:opacity 0.08s}
+
+/* ── EMPTY STATE ──────────────────────────────────────────────────────────── */
+.empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.empty-text{font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px}
+.empty-sub{font-size:13px}
+
+/* ── DIVIDER ──────────────────────────────────────────────────────────────── */
+.divider{height:0.5px;background:var(--border);margin:16px 0}
+
+/* ── SLIDER ROW ───────────────────────────────────────────────────────────── */
+.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.slider-lbl{font-size:11px;color:var(--muted);min-width:110px;text-transform:uppercase;letter-spacing:0.04em}
+.slider-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+.slider-val{font-size:12px;font-weight:500;min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<!-- ── CAMERA + AR ──────────────────────────────────────────────────────── -->
+<video id="video" autoplay playsinline muted></video>
+<canvas id="ar-canvas"></canvas>
+<div id="tap-layer"></div>
+
+<!-- ── AR HUD ──────────────────────────────────────────────────────────── -->
+<div id="ar-top" style="display:none">
+  <div class="ar-pill">ANR · <strong id="ar-lens-label">50mm</strong></div>
+  <div class="ar-legend">
+    <div class="leg"><div class="leg-line" style="background:#3A9EE8"></div>plate</div>
+    <div class="leg"><div class="leg-line" style="background:#00E5A0"></div>crop</div>
+    <div class="leg"><div class="leg-line" style="background:#FF5C35"></div>wall</div>
+    <div class="leg"><div class="leg-line" style="background:#A78BFA"></div>talent</div>
+  </div>
+</div>
+
+<div id="ar-dist" style="display:none;top:0">
+  <div class="dist-card">
+    <div class="dist-val"><span id="d-ct">—</span><span class="dist-unit">ft</span></div>
+    <div class="dist-lbl">Cam→Talent</div>
+  </div>
+  <div class="dist-card">
+    <div class="dist-val"><span id="d-tw">—</span><span class="dist-unit">ft</span></div>
+    <div class="dist-lbl">Talent→Wall</div>
+  </div>
+  <div class="dist-card">
+    <div class="dist-val"><span id="d-cw">—</span><span class="dist-unit">ft</span></div>
+    <div class="dist-lbl">Cam→Wall</div>
+  </div>
+</div>
+
+<div id="crosshair"><div class="ch-ring"><div class="ch-dot"></div></div></div>
+<div id="tap-hint"></div>
+
+<!-- ── BOTTOM AR PANEL ──────────────────────────────────────────────────── -->
+<div id="ar-bottom" style="display:none">
+  <div class="ar-panel">
+    <div id="ar-warn"></div>
+    <div class="lens-row">
+      <div class="lens-btn" data-fl="24">24<span>mm</span></div>
+      <div class="lens-btn" data-fl="35">35<span>mm</span></div>
+      <div class="lens-btn active" data-fl="50">50<span>mm</span></div>
+      <div class="lens-btn" data-fl="85">85<span>mm</span></div>
+      <div class="lens-btn" data-fl="135">135<span>mm</span></div>
+    </div>
+    <div class="action-row">
+      <div class="ar-btn" id="btn-set-wall">⊙ Set Wall</div>
+      <div class="ar-btn" id="btn-manual-dist">Manual</div>
+      <div class="ar-btn" id="btn-save-setup">Save Setup</div>
+      <div class="ar-btn" id="btn-capture">⬤ Capture</div>
+    </div>
+    <div class="action-row" style="margin-bottom:0">
+      <div class="ar-btn" id="btn-toggle-overlay">Overlay ON</div>
+      <div class="ar-btn" id="btn-menu">☰ Menu</div>
+    </div>
+    <div class="ar-metrics" style="margin-top:10px">
+      <div class="ar-metric"><div class="ar-metric-val" id="m-hfov">—</div><div class="ar-metric-lbl">HFoV</div></div>
+      <div class="ar-metric-sep"></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-crop">—</div><div class="ar-metric-lbl">Plate used</div></div>
+      <div class="ar-metric-sep"></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-wall-cov">—</div><div class="ar-metric-lbl">Wall used</div></div>
+      <div class="ar-metric-sep"></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-safety" style="font-size:12px">—</div><div class="ar-metric-lbl">Safety</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MANUAL MODAL ─────────────────────────────────────────────────────── -->
+<div id="manual-modal">
+  <div class="modal-sheet">
+    <div class="modal-title">Manual distances</div>
+    <div class="modal-sub">Enter measured distances. Overlay will calculate geometry.</div>
+    <div class="modal-row">
+      <div class="modal-lbl">Cam → Talent</div>
+      <input type="range" id="mm-cam-char" min="5" max="50" value="20" step="1">
+      <div class="modal-val"><span id="mmv-cam-char">20</span>ft</div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-lbl">Talent → Wall</div>
+      <input type="range" id="mm-char-wall" min="12" max="15" value="13" step="1">
+      <div class="modal-val"><span id="mmv-char-wall">13</span>ft</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-modal-ok">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SAVE SETUP MODAL ──────────────────────────────────────────────────── -->
+<div id="setup-modal">
+  <div class="setup-sheet">
+    <div class="modal-title">Save Setup</div>
+    <div class="modal-sub">Saves current distances, lens, and overlay state to the active session.</div>
+    <div class="form-group">
+      <label class="form-label">Setup type</label>
+      <select class="form-select" id="setup-type">
+        <option value="MASTER">Master</option>
+        <option value="COUNTER_A">Counter A</option>
+        <option value="COUNTER_B">Counter B</option>
+        <option value="TIGHT">Tight / Insert</option>
+        <option value="WIDE">Wide Safety</option>
+        <option value="OTS">Over the Shoulder</option>
+        <option value="CUSTOM">Custom</option>
+      </select>
+    </div>
+    <div class="form-group" id="setup-variant-group">
+      <label class="form-label">Variant (optional)</label>
+      <input class="form-input" id="setup-variant" placeholder="e.g. A, B, REFRAME">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="setup-notes" placeholder="e.g. Dutch angle, low mode">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-setup-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-setup-save">Save Setup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── FLASH ─────────────────────────────────────────────────────────────── -->
+<div id="flash"></div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: WELCOME
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-welcome">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center">
+    <div style="font-size:48px;margin-bottom:20px">🎬</div>
+    <h1 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:8px">VP Plate Planner</h1>
+    <p style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:40px;max-width:280px">AR-assisted on-location plate shoot planning for virtual production teams.</p>
+    <button class="btn btn-primary" id="btn-enter" style="max-width:260px">Open Projects</button>
+    <p style="font-size:11px;color:var(--dim);margin-top:16px">ANR VP Stage · Chennai · v1.0</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: PROJECTS
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-projects">
+  <div class="nav-bar">
+    <div class="nav-title">Projects</div>
+    <button class="nav-btn right" id="btn-new-project">+ New</button>
+  </div>
+  <div style="padding:0 16px;flex:1">
+    <div id="project-list"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: NEW PROJECT
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-new-project">
+  <div class="nav-bar">
+    <button class="nav-btn" id="btn-back-from-new-project">Cancel</button>
+    <div class="nav-title">New Project</div>
+    <button class="nav-btn right" id="btn-create-project">Create</button>
+  </div>
+  <div style="padding:0 16px">
+    <div class="form-group">
+      <label class="form-label">Project name</label>
+      <input class="form-input" id="inp-project-name" placeholder="e.g. D55_HIGHWAY_SEQUENCE" autocapitalize="characters">
+    </div>
+    <p style="font-size:12px;color:var(--dim);margin-top:-8px">Spaces will be replaced with underscores. Stored locally on device.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: SESSIONS
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-sessions">
+  <div class="nav-bar">
+    <button class="nav-btn" id="btn-back-to-projects">Projects</button>
+    <div class="nav-title" id="sessions-title">Sessions</div>
+    <button class="nav-btn right" id="btn-new-session">+ New</button>
+  </div>
+  <div style="padding:0 16px;flex:1">
+    <div id="session-list"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: NEW SESSION
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-new-session">
+  <div class="nav-bar">
+    <button class="nav-btn" id="btn-back-from-new-session">Cancel</button>
+    <div class="nav-title">New Session</div>
+    <button class="nav-btn right" id="btn-create-session">Create</button>
+  </div>
+  <div style="padding:0 16px">
+    <div class="form-group">
+      <label class="form-label">Location / Scene ID</label>
+      <input class="form-input" id="inp-session-location" placeholder="e.g. ECR_ROADSIDE_EXT" autocapitalize="characters">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description (optional)</label>
+      <input class="form-input" id="inp-session-desc" placeholder="e.g. Day exterior, main road">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Stage profile</label>
+      <select class="form-select" id="inp-session-stage">
+        <option value="ANR_CHENNAI">ANR VP Stage — Chennai (52ft / 21ft)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Plate camera</label>
+      <select class="form-select" id="inp-session-cam">
+        <option value="IPHONE_17_PRO_MAX">iPhone 17 Pro Max</option>
+        <option value="SONY_A7R4">Sony A7R IV</option>
+        <option value="SONY_A7S3">Sony A7S III</option>
+        <option value="RED_KOMODO_6K">RED Komodo 6K</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: SETUPS (session detail)
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-setups">
+  <div class="nav-bar">
+    <button class="nav-btn" id="btn-back-to-sessions">Sessions</button>
+    <div class="nav-title" id="setups-title">Setups</div>
+    <button class="nav-btn right" id="btn-open-ar">▶ AR</button>
+  </div>
+  <div style="padding:0 16px;flex:1">
+    <div id="session-info-card" class="card" style="margin-bottom:16px"></div>
+    <div class="section-title">Setups</div>
+    <div id="setup-list"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-secondary" id="btn-open-ar-2">Open AR Viewer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     SCREEN: AR (active shooting)
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-ar">
+  <!-- AR screen is mostly transparent — camera shows through -->
+  <!-- Controls are in the fixed ar-top, ar-dist, ar-bottom divs -->
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none"></div>
+</div>
+
+<script type="module">
+import { STAGE_PROFILES, PLATE_CAMERAS, STAGE_CAMERAS,
+         hfovRad, vfovRad, cropRatio, wallCoverage,
+         safetyRating, mToFt, ftToM, LENS_PRESETS } from './src/profiles.js';
+import { createProject, getProjects, deleteProject,
+         createSession, getSessions, deleteSession,
+         createSetup, getSetups, deleteSetup,
+         getActiveState, setActiveState, saveScreenshot } from './src/session.js';
+import { AREngine } from './src/ar.js';
+import { renderTechvisSheet, downloadCanvas } from './src/export.js';
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let activeProjectId = null;
+let activeSessionId = null;
+let arEngine        = null;
+let cameraStarted   = false;
+let settingWall     = false;
+let overlayOn       = true;
+let currentFL       = 50;
+
+const stageProfile  = STAGE_PROFILES.ANR_CHENNAI;
+const stageCamera   = STAGE_CAMERAS.URSA_12K_LF;
+
+// ── SCREEN ROUTER ─────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+
+  const arActive = id === 'ar';
+  document.getElementById('ar-top').style.display    = arActive ? 'flex' : 'none';
+  document.getElementById('ar-dist').style.display   = arActive ? 'flex' : 'none';
+  document.getElementById('ar-bottom').style.display = arActive ? 'block' : 'none';
+
+  if (arActive) {
+    positionDistCards();
+    if (!cameraStarted) startCamera();
+    if (!arEngine) initAR();
+  }
+}
+
+function positionDistCards() {
+  const topBar = document.getElementById('ar-top');
+  const distDiv = document.getElementById('ar-dist');
+  const topH = topBar.offsetHeight || 52;
+  const safeTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0;
+  distDiv.style.top = (safeTop + topH + 6) + 'px';
+}
+
+// ── WELCOME ───────────────────────────────────────────────────────────────
+document.getElementById('btn-enter').addEventListener('click', () => {
+  show('projects');
+  renderProjects();
+});
+
+// ── PROJECTS ──────────────────────────────────────────────────────────────
+function renderProjects() {
+  const list = document.getElementById('project-list');
+  const projects = getProjects();
+  if (!projects.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">No projects yet</div><div class="empty-sub">Tap + New to create your first project</div></div>`;
+    return;
+  }
+  list.innerHTML = projects.map(p => `
+    <div class="card" data-id="${p.id}" style="cursor:pointer">
+      <div class="card-row">
+        <div>
+          <div class="card-label">${p.name}</div>
+          <div class="card-sub">${getSessions(p.id).length} session(s) · ${formatDate(p.createdAt)}</div>
+        </div>
+        <span class="card-chevron">›</span>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => {
+      activeProjectId = card.dataset.id;
+      const p = getProjects().find(x => x.id === activeProjectId);
+      document.getElementById('sessions-title').textContent = p?.name || 'Sessions';
+      show('sessions');
+      renderSessions();
+    });
+  });
+}
+
+document.getElementById('btn-new-project').addEventListener('click', () => show('new-project'));
+document.getElementById('btn-back-from-new-project').addEventListener('click', () => show('projects'));
+document.getElementById('btn-create-project').addEventListener('click', () => {
+  const name = document.getElementById('inp-project-name').value.trim();
+  if (!name) return;
+  createProject(name);
+  document.getElementById('inp-project-name').value = '';
+  show('projects');
+  renderProjects();
+});
+
+// ── SESSIONS ──────────────────────────────────────────────────────────────
+function renderSessions() {
+  const list = document.getElementById('session-list');
+  const sessions = getSessions(activeProjectId);
+  if (!sessions.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎥</div><div class="empty-text">No sessions yet</div><div class="empty-sub">Tap + New to add a plate session</div></div>`;
+    return;
+  }
+  list.innerHTML = sessions.map(s => `
+    <div class="card" data-id="${s.id}" style="cursor:pointer">
+      <div class="card-row">
+        <div>
+          <div class="card-label">${s.location}</div>
+          <div class="card-sub">${s.description || ''} · ${getSetups(activeProjectId, s.id).length} setup(s)</div>
+          <div class="card-meta">${s.stageProfileId} · ${s.plateCameraId}</div>
+        </div>
+        <span class="card-chevron">›</span>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => {
+      activeSessionId = card.dataset.id;
+      renderSetupScreen();
+      show('setups');
+    });
+  });
+}
+
+document.getElementById('btn-back-to-projects').addEventListener('click', () => { show('projects'); renderProjects(); });
+document.getElementById('btn-new-session').addEventListener('click', () => show('new-session'));
+document.getElementById('btn-back-from-new-session').addEventListener('click', () => show('sessions'));
+document.getElementById('btn-create-session').addEventListener('click', () => {
+  const location = document.getElementById('inp-session-location').value.trim();
+  if (!location) return;
+  createSession(activeProjectId, {
+    location,
+    description: document.getElementById('inp-session-desc').value.trim(),
+    stageProfileId: document.getElementById('inp-session-stage').value,
+    plateCameraId: document.getElementById('inp-session-cam').value,
+  });
+  document.getElementById('inp-session-location').value = '';
+  document.getElementById('inp-session-desc').value = '';
+  show('sessions');
+  renderSessions();
+});
+
+// ── SETUPS ────────────────────────────────────────────────────────────────
+function renderSetupScreen() {
+  const sessions  = getSessions(activeProjectId);
+  const session   = sessions.find(s => s.id === activeSessionId);
+  if (!session) return;
+  const plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
+
+  document.getElementById('setups-title').textContent = session.location;
+  document.getElementById('session-info-card').innerHTML = `
+    <div class="card-row"><div>
+      <div class="card-label">${session.location}</div>
+      <div class="card-sub">${session.description || 'No description'}</div>
+    </div></div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:24px;font-size:12px;color:var(--muted)">
+      <div><span style="color:var(--dim)">Stage</span><br><span style="color:var(--text)">${stageProfile.shortName}</span></div>
+      <div><span style="color:var(--dim)">Plate cam</span><br><span style="color:var(--text)">${plateCamera.shortName}</span></div>
+      <div><span style="color:var(--dim)">Wall</span><br><span style="color:var(--text)">${stageProfile.wall.arcFt}ft arc</span></div>
+    </div>
+  `;
+
+  const setups = getSetups(activeProjectId, activeSessionId);
+  const setupList = document.getElementById('setup-list');
+  if (!setups.length) {
+    setupList.innerHTML = `<div class="empty-state"><div class="empty-icon">📐</div><div class="empty-text">No setups saved</div><div class="empty-sub">Open AR viewer and tap Save Setup to record a framing</div></div>`;
+    return;
+  }
+  setupList.innerHTML = setups.map(s => `
+    <div class="card">
+      <div class="card-row">
+        <div>
+          <div class="card-label" style="font-family:var(--mono);font-size:13px">${s.setupId}</div>
+          <div class="card-sub">${s.params.fl ? s.params.fl + 'mm' : ''} · Cam→Wall ${s.params.camToWall_ft ? s.params.camToWall_ft + 'ft' : '—'} · ${s.params.safety || '—'}</div>
+          ${s.params.notes ? `<div class="card-meta">${s.params.notes}</div>` : ''}
+        </div>
+        <div class="card-badge">${formatDate(s.createdAt)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('btn-back-to-sessions').addEventListener('click', () => { show('sessions'); renderSessions(); });
+document.getElementById('btn-open-ar').addEventListener('click', openAR);
+document.getElementById('btn-open-ar-2').addEventListener('click', openAR);
+
+function openAR() {
+  const sessions = getSessions(activeProjectId);
+  const session  = sessions.find(s => s.id === activeSessionId);
+  if (arEngine && session) {
+    arEngine.plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
+  }
+  show('ar');
+}
+
+// ── AR ENGINE ─────────────────────────────────────────────────────────────
+async function startCamera() {
+  cameraStarted = true;
+  const video = document.getElementById('video');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch(e) { alert('Camera access required. Open in Safari and allow camera access.'); }
+}
+
+function initAR() {
+  const canvas = document.getElementById('ar-canvas');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  arEngine = new AREngine(canvas);
+  arEngine.stageProfile = stageProfile;
+  arEngine.stageCamera  = stageCamera;
+
+  const sessions = getSessions(activeProjectId);
+  const session  = sessions?.find(s => s.id === activeSessionId);
+  arEngine.plateCamera = PLATE_CAMERAS[session?.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
+
+  arEngine.currentFL    = currentFL;
+  arEngine.camToChar_m  = ftToM(20);
+  arEngine.charToWall_m = ftToM(13);
+  arEngine.start();
+
+  window.addEventListener('resize', () => arEngine.resize());
+
+  // Device orientation
+  const reqPerm = typeof DeviceOrientationEvent !== 'undefined' &&
+                  typeof DeviceOrientationEvent.requestPermission === 'function';
+  if (reqPerm) {
+    DeviceOrientationEvent.requestPermission().then(p => {
+      if (p === 'granted') window.addEventListener('deviceorientation', onOrient, true);
+    }).catch(() => {});
+  } else {
+    window.addEventListener('deviceorientation', onOrient, true);
+  }
+
+  // Metric updates
+  setInterval(updateARMetrics, 200);
+}
+
+function onOrient(e) {
+  if (arEngine) arEngine.onOrientation(e.alpha || 0, e.beta || 0, e.gamma || 0);
+}
+
+function updateARMetrics() {
+  if (!arEngine) return;
+  const fl       = arEngine.currentFL;
+  const camToW_m = arEngine.wallDist_m || (arEngine.camToChar_m + arEngine.charToWall_m);
+  const camToC_m = arEngine.camToChar_m;
+  const charW_m  = arEngine.charToWall_m;
+
+  const plateHFOV = arEngine.plateCamera?.fovEquiv_deg * Math.PI / 180 || 1.29;
+  const stageHFOV = hfovRad(stageCamera.sensorW_mm, fl);
+  const cr        = cropRatio(plateHFOV, stageHFOV);
+  const wc        = wallCoverage(stageHFOV, camToW_m, stageProfile.wall.chordM);
+  const safety    = safetyRating(cr, wc);
+
+  document.getElementById('d-ct').textContent  = Math.round(mToFt(camToC_m));
+  document.getElementById('d-tw').textContent  = Math.round(mToFt(charW_m));
+  document.getElementById('d-cw').textContent  = Math.round(mToFt(camToW_m));
+  document.getElementById('m-hfov').textContent = (stageHFOV * 180 / Math.PI).toFixed(1) + '°';
+  document.getElementById('m-crop').textContent = Math.round(cr * 100) + '%';
+  document.getElementById('m-wall-cov').textContent = Math.round(wc * 100) + '%';
+  const safeEl = document.getElementById('m-safety');
+  safeEl.textContent  = safety.label;
+  safeEl.style.color  = safety.color;
+
+  const warnEl = document.getElementById('ar-warn');
+  const warns  = [];
+  if (wc > 1.0) warns.push('On-set lens exceeds wall width — spill risk');
+  if (cr > 0.93) warns.push('Crop near plate boundary — reframe margin tight');
+  warnEl.style.display = warns.length ? 'block' : 'none';
+  if (warns.length) warnEl.textContent = '⚠ ' + warns.join(' · ');
+}
+
+// ── LENS BUTTONS ──────────────────────────────────────────────────────────
+document.querySelectorAll('.lens-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFL = parseInt(btn.dataset.fl);
+    document.getElementById('ar-lens-label').textContent = currentFL + 'mm';
+    if (arEngine) arEngine.currentFL = currentFL;
+  });
+});
+
+// ── SET WALL ──────────────────────────────────────────────────────────────
+const tapLayer = document.getElementById('tap-layer');
+document.getElementById('btn-set-wall').addEventListener('click', () => {
+  if (!arEngine) return;
+  settingWall = true;
+  document.getElementById('crosshair').style.display = 'block';
+  const hint = document.getElementById('tap-hint');
+  hint.style.display = 'block';
+  hint.textContent   = 'Point at wall centre · Tap to lock';
+  tapLayer.style.pointerEvents = 'all';
+  document.getElementById('btn-set-wall').textContent = '⊙ Setting…';
+  document.getElementById('btn-set-wall').classList.add('warn-btn');
+});
+
+tapLayer.addEventListener('click', () => {
+  if (!settingWall) return;
+  settingWall = false;
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('tap-hint').style.display  = 'none';
+  tapLayer.style.pointerEvents = 'none';
+
+  // Lock gyro anchor, then open manual for distance
+  if (arEngine) {
+    arEngine.anchorAlpha = arEngine.alpha;
+    arEngine.anchorBeta  = arEngine.beta;
+    arEngine.anchorGamma = arEngine.gamma;
+    arEngine.wallLocked  = true;
+  }
+  document.getElementById('btn-set-wall').textContent = '✓ Wall set';
+  document.getElementById('btn-set-wall').classList.remove('warn-btn');
+  document.getElementById('btn-set-wall').classList.add('on');
+  // Ask for distance
+  document.getElementById('manual-modal').style.display = 'flex';
+});
+
+// ── MANUAL DISTANCE ───────────────────────────────────────────────────────
+document.getElementById('mm-cam-char').addEventListener('input', function() {
+  document.getElementById('mmv-cam-char').textContent = this.value;
+});
+document.getElementById('mm-char-wall').addEventListener('input', function() {
+  document.getElementById('mmv-char-wall').textContent = this.value;
+});
+document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+  document.getElementById('manual-modal').style.display = 'none';
+});
+document.getElementById('btn-manual-dist').addEventListener('click', () => {
+  document.getElementById('manual-modal').style.display = 'flex';
+});
+document.getElementById('btn-modal-ok').addEventListener('click', () => {
+  const cc = parseInt(document.getElementById('mm-cam-char').value);
+  const cw = parseInt(document.getElementById('mm-char-wall').value);
+  if (arEngine) {
+    arEngine.camToChar_m  = ftToM(cc);
+    arEngine.charToWall_m = ftToM(cw);
+    arEngine.wallDist_m   = ftToM(cc + cw);
+    if (!arEngine.wallLocked) {
+      arEngine.anchorAlpha = arEngine.alpha;
+      arEngine.anchorBeta  = arEngine.beta;
+      arEngine.anchorGamma = arEngine.gamma;
+      arEngine.wallLocked  = true;
+    }
+  }
+  document.getElementById('manual-modal').style.display = 'none';
+});
+
+// ── SAVE SETUP ────────────────────────────────────────────────────────────
+document.getElementById('btn-save-setup').addEventListener('click', () => {
+  if (!activeProjectId || !activeSessionId) {
+    alert('Open a session first from the menu before saving a setup.');
+    return;
+  }
+  document.getElementById('setup-modal').style.display = 'flex';
+});
+document.getElementById('btn-setup-cancel').addEventListener('click', () => {
+  document.getElementById('setup-modal').style.display = 'none';
+});
+document.getElementById('btn-setup-save').addEventListener('click', () => {
+  if (!arEngine) return;
+  const fl      = arEngine.currentFL;
+  const camToW  = Math.round(mToFt(arEngine.wallDist_m || arEngine.camToChar_m + arEngine.charToWall_m));
+  const camToC  = Math.round(mToFt(arEngine.camToChar_m));
+  const charW   = Math.round(mToFt(arEngine.charToWall_m));
+
+  const plateHFOV = arEngine.plateCamera?.fovEquiv_deg * Math.PI / 180 || 1.29;
+  const stageHFOV = hfovRad(stageCamera.sensorW_mm, fl);
+  const cr        = cropRatio(plateHFOV, stageHFOV);
+  const wc        = wallCoverage(stageHFOV, arEngine.wallDist_m || ftToM(camToW), stageProfile.wall.chordM);
+  const safety    = safetyRating(cr, wc);
+
+  createSetup(activeProjectId, activeSessionId, {
+    type:    document.getElementById('setup-type').value,
+    variant: document.getElementById('setup-variant').value.trim(),
+    params: {
+      fl, camToWall_ft: camToW, camToChar_ft: camToC, charToWall_ft: charW,
+      safety: safety.label,
+      plateCrop: Math.round(cr * 100),
+      wallCov: Math.round(wc * 100),
+      notes: document.getElementById('setup-notes').value.trim(),
+    },
+  });
+  document.getElementById('setup-variant').value = '';
+  document.getElementById('setup-notes').value   = '';
+  document.getElementById('setup-modal').style.display = 'none';
+  alert('Setup saved.');
+});
+
+// ── CAPTURE ───────────────────────────────────────────────────────────────
+document.getElementById('btn-capture').addEventListener('click', async () => {
+  const flash = document.getElementById('flash');
+  flash.style.opacity = '1';
+  setTimeout(() => { flash.style.opacity = '0'; }, 100);
+
+  await new Promise(r => setTimeout(r, 80));
+
+  const sessions = getSessions(activeProjectId);
+  const session  = sessions?.find(s => s.id === activeSessionId);
+  const project  = { name: session ? 'PROJECT' : 'UNTITLED' };
+  const setup    = null;
+  const plateCamera = arEngine?.plateCamera || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
+
+  const techvis = renderTechvisSheet({
+    videoEl:      document.getElementById('video'),
+    arCanvas:     document.getElementById('ar-canvas'),
+    project:      { name: activeProjectId ? getProjects().find(p=>p.id===activeProjectId)?.name : 'UNTITLED' },
+    session:      session || { location: 'NO_SESSION' },
+    setup,
+    stageProfile,
+    plateCamera,
+    stageCamera,
+    currentFL,
+    camToChar_m:  arEngine?.camToChar_m  || ftToM(20),
+    charToWall_m: arEngine?.charToWall_m || ftToM(13),
+  });
+
+  const ts = new Date();
+  const name = `VP_${currentFL}mm_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}_${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}.jpg`;
+  downloadCanvas(techvis, name);
+});
+
+// ── OVERLAY TOGGLE ────────────────────────────────────────────────────────
+document.getElementById('btn-toggle-overlay').addEventListener('click', function() {
+  overlayOn = !overlayOn;
+  if (arEngine) arEngine.visible = overlayOn;
+  this.textContent = overlayOn ? 'Overlay ON' : 'Overlay OFF';
+  this.classList.toggle('on', overlayOn);
+});
+
+// ── MENU (back to sessions) ───────────────────────────────────────────────
+document.getElementById('btn-menu').addEventListener('click', () => {
+  if (activeProjectId && activeSessionId) {
+    renderSetupScreen();
+    show('setups');
+  } else if (activeProjectId) {
+    show('sessions');
+    renderSessions();
+  } else {
+    show('projects');
+    renderProjects();
+  }
+});
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+function formatDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "VP Plate Planner",
+  "short_name": "Plate AR",
+  "description": "AR-assisted on-location plate shoot planning for virtual production",
+  "start_url": "/vp-plate-planner/",
+  "scope": "/vp-plate-planner/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0C0F",
+  "theme_color": "#0A0C0F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "categories": ["productivity", "utilities"]
+}

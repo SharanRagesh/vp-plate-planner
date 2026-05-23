@@ -30,10 +30,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 /* ── LAYERS ──────────────────────────────────────────────────────────────── */
 #video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
 #ar-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
-#tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none}
+#tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:manipulation}
+#tap-layer.active{z-index:25;pointer-events:auto;cursor:crosshair}
+#tap-hint,#crosshair{pointer-events:none}
+#tap-layer.wall-setting{z-index:25;pointer-events:all;touch-action:none}
 
 /* ── SCREEN SYSTEM ───────────────────────────────────────────────────────── */
-.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:transparent;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
+.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
 .screen.active{display:flex}
 .screen-inner{flex:1;display:flex;flex-direction:column;padding:calc(var(--safe-top) + 16px) 16px 0}
 
@@ -97,6 +100,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 
 /* ── BOTTOM AR PANEL ─────────────────────────────────────────────────────── */
 #ar-bottom{position:fixed;z-index:10;bottom:0;left:0;right:0}
+#ar-bottom.wall-setting{pointer-events:none;opacity:0.55}
 .ar-panel{background:rgba(8,10,14,0.9);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid var(--border);padding:10px 12px calc(var(--safe-bot) + 8px)}
 .lens-row{display:flex;gap:7px;margin-bottom:10px;justify-content:center}
 .lens-btn{flex:1;max-width:62px;padding:9px 0;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--muted);font-size:13px;font-weight:500;text-align:center;cursor:pointer;transition:all 0.15s;font-family:var(--font)}
@@ -147,7 +151,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .slider-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
 .slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
 .slider-val{font-size:12px;font-weight:500;min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
-#screen-ar{background:transparent !important;z-index:3}
 </style>
 </head>
 <body>
@@ -392,7 +395,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 <!-- ════════════════════════════════════════════════════════════════════════
      SCREEN: AR (active shooting)
 ════════════════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-ar" style="background:transparent !important">
+<div class="screen" id="screen-ar">
+  <!-- AR screen is mostly transparent — camera shows through -->
+  <!-- Controls are in the fixed ar-top, ar-dist, ar-bottom divs -->
+  <div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none"></div>
 </div>
 
 <script type="module">
@@ -414,6 +420,8 @@ let cameraStarted   = false;
 let settingWall     = false;
 let overlayOn       = true;
 let currentFL       = 50;
+let motionEnabled   = false;
+let orientHandler   = null;
 
 const stageProfile  = STAGE_PROFILES.ANR_CHENNAI;
 const stageCamera   = STAGE_CAMERAS.URSA_12K_LF;
@@ -582,13 +590,15 @@ document.getElementById('btn-back-to-sessions').addEventListener('click', () => 
 document.getElementById('btn-open-ar').addEventListener('click', openAR);
 document.getElementById('btn-open-ar-2').addEventListener('click', openAR);
 
-function openAR() {
+async function openAR() {
   const sessions = getSessions(activeProjectId);
   const session  = sessions.find(s => s.id === activeSessionId);
   if (arEngine && session) {
     arEngine.plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
   }
   show('ar');
+  // iOS Safari: motion permission must be requested from a user tap
+  await enableMotionSensors(false);
 }
 
 // ── AR ENGINE ─────────────────────────────────────────────────────────────
@@ -624,23 +634,46 @@ function initAR() {
 
   window.addEventListener('resize', () => arEngine.resize());
 
-  // Device orientation
-  const reqPerm = typeof DeviceOrientationEvent !== 'undefined' &&
-                  typeof DeviceOrientationEvent.requestPermission === 'function';
-  if (reqPerm) {
-    DeviceOrientationEvent.requestPermission().then(p => {
-      if (p === 'granted') window.addEventListener('deviceorientation', onOrient, true);
-    }).catch(() => {});
-  } else {
-    window.addEventListener('deviceorientation', onOrient, true);
-  }
+  orientHandler = onOrient;
+  enableMotionSensors(false);
 
   // Metric updates
   setInterval(updateARMetrics, 200);
 }
 
+async function enableMotionSensors(showAlert) {
+  if (motionEnabled) return true;
+  if (typeof DeviceOrientationEvent === 'undefined') {
+    if (showAlert) alert('Motion sensors are not available in this browser.');
+    return false;
+  }
+
+  const needsPerm = typeof DeviceOrientationEvent.requestPermission === 'function';
+  try {
+    if (needsPerm) {
+      const p = await DeviceOrientationEvent.requestPermission();
+      if (p !== 'granted') {
+        if (showAlert) {
+          alert('Motion access is required to anchor the overlay to the wall. Enable it in Settings → Safari → Motion & Orientation Access.');
+        }
+        return false;
+      }
+    }
+    if (orientHandler) {
+      window.removeEventListener('deviceorientation', orientHandler, true);
+      window.addEventListener('deviceorientation', orientHandler, true);
+    }
+    motionEnabled = true;
+    return true;
+  } catch {
+    if (showAlert) alert('Could not enable motion sensors. Try again from a tap (Safari requires a direct tap).');
+    return false;
+  }
+}
+
 function onOrient(e) {
-  if (arEngine) arEngine.onOrientation(e.alpha || 0, e.beta || 0, e.gamma || 0);
+  if (!arEngine || e.alpha == null) return;
+  arEngine.onOrientation(e.alpha, e.beta || 0, e.gamma || 0);
 }
 
 function updateARMetrics() {
@@ -687,37 +720,57 @@ document.querySelectorAll('.lens-btn').forEach(btn => {
 
 // ── SET WALL ──────────────────────────────────────────────────────────────
 const tapLayer = document.getElementById('tap-layer');
-document.getElementById('btn-set-wall').addEventListener('click', () => {
-  if (!arEngine) return;
+const arBottom = document.getElementById('ar-bottom');
+const btnSetWall = document.getElementById('btn-set-wall');
+
+function exitWallSettingMode() {
+  settingWall = false;
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('tap-hint').style.display  = 'none';
+  tapLayer.classList.remove('active');
+  arBottom.classList.remove('wall-setting');
+}
+
+function enterWallSettingMode() {
   settingWall = true;
   document.getElementById('crosshair').style.display = 'block';
   const hint = document.getElementById('tap-hint');
   hint.style.display = 'block';
-  hint.textContent   = 'Point at wall centre · Tap to lock';
-  tapLayer.style.pointerEvents = 'all';
-  document.getElementById('btn-set-wall').textContent = '⊙ Setting…';
-  document.getElementById('btn-set-wall').classList.add('warn-btn');
+  hint.textContent   = 'Aim crosshair at wall centre · Tap screen to lock';
+  tapLayer.classList.add('active');
+  arBottom.classList.add('wall-setting');
+  btnSetWall.textContent = '✕ Cancel';
+  btnSetWall.classList.add('warn-btn');
+}
+
+btnSetWall.addEventListener('click', async () => {
+  if (!arEngine) return;
+  if (settingWall) {
+    exitWallSettingMode();
+    btnSetWall.textContent = '⊙ Set Wall';
+    btnSetWall.classList.remove('warn-btn');
+    return;
+  }
+  await enableMotionSensors(true);
+  enterWallSettingMode();
 });
 
-tapLayer.addEventListener('click', () => {
-  if (!settingWall) return;
-  settingWall = false;
-  document.getElementById('crosshair').style.display = 'none';
-  document.getElementById('tap-hint').style.display  = 'none';
-  tapLayer.style.pointerEvents = 'none';
+function lockWallFromTap() {
+  if (!settingWall || !arEngine) return;
+  exitWallSettingMode();
 
-  // Lock gyro anchor, then open manual for distance
-  if (arEngine) {
-    arEngine.anchorAlpha = arEngine.alpha;
-    arEngine.anchorBeta  = arEngine.beta;
-    arEngine.anchorGamma = arEngine.gamma;
-    arEngine.wallLocked  = true;
-  }
-  document.getElementById('btn-set-wall').textContent = '✓ Wall set';
-  document.getElementById('btn-set-wall').classList.remove('warn-btn');
-  document.getElementById('btn-set-wall').classList.add('on');
-  // Ask for distance
+  arEngine.lockWallAnchor(arEngine.camToChar_m + arEngine.charToWall_m);
+
+  btnSetWall.textContent = '✓ Wall set';
+  btnSetWall.classList.remove('warn-btn');
+  btnSetWall.classList.add('on');
   document.getElementById('manual-modal').style.display = 'flex';
+}
+
+tapLayer.addEventListener('pointerup', (e) => {
+  if (!settingWall) return;
+  e.preventDefault();
+  lockWallFromTap();
 });
 
 // ── MANUAL DISTANCE ───────────────────────────────────────────────────────
@@ -846,26 +899,7 @@ document.getElementById('btn-menu').addEventListener('click', () => {
   }
 });
 
-  // ── DEBUG OVERLAY ─────────────────────────────────────────────
-window.onerror = function(msg, src, line, col, err) {
-  showDebug('JS ERROR: ' + msg + ' @ line ' + line);
-};
-window.addEventListener('unhandledrejection', e => {
-  showDebug('PROMISE: ' + (e.reason?.message || e.reason));
-});
-function showDebug(msg) {
-  let d = document.getElementById('debug-overlay');
-  if (!d) {
-    d = document.createElement('div');
-    d.id = 'debug-overlay';
-    d.style.cssText = 'position:fixed;top:50%;left:0;right:0;z-index:999;background:rgba(255,0,0,0.9);color:#fff;font-size:13px;padding:12px;font-family:monospace;white-space:pre-wrap;transform:translateY(-50%)';
-    document.body.appendChild(d);
-  }
-  d.textContent += msg + '\n';
-}
-  
 // ── UTILS ─────────────────────────────────────────────────────────────────
-  
 function formatDate(ts) {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;

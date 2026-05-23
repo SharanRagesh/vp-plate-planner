@@ -73,8 +73,8 @@ export class AREngine {
   _anchorOffset() {
     if (!this.wallLocked) return { dx: 0, dy: 0 };
     const W = this.canvas.width, H = this.canvas.height;
-    const phoneFOV_H = 65 * Math.PI / 180;
-    const phoneFOV_V = 48 * Math.PI / 180;
+    const phoneFOV_H = (this.plateCamera?.fovEquiv_deg ?? 65) * Math.PI / 180;
+    const phoneFOV_V = phoneFOV_H * (H / W);
     const fPx_x = (W / 2) / Math.tan(phoneFOV_H / 2);
     const fPx_y = (H / 2) / Math.tan(phoneFOV_V / 2);
 
@@ -120,8 +120,8 @@ export class AREngine {
     const cr = cropRatio(plateHFOV, stageHFOV);
     const wc = wallCoverage(stageHFOV, camToW, wall.chordM);
 
-    // Phone camera virtual focal length
-    const phoneFOV = 65 * Math.PI / 180;
+    // Phone / plate camera HFOV (matches live preview lens)
+    const phoneFOV = (this.plateCamera?.fovEquiv_deg ?? 65) * Math.PI / 180;
     const fPx = (W / 2) / Math.tan(phoneFOV / 2);
 
     const cx   = W / 2;

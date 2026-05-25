@@ -29,7 +29,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 
 /* ── LAYERS ──────────────────────────────────────────────────────────────── */
 #video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-#ar-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+#ar-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;background:transparent}
 #tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:manipulation}
 #tap-layer.active{z-index:25;pointer-events:auto;cursor:crosshair}
 #tap-hint,#crosshair{pointer-events:none}
@@ -162,6 +162,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 
 <!-- ── AR HUD ──────────────────────────────────────────────────────────── -->
 <div id="ar-top" style="display:none">
+  <div class="ar-pill" id="ar-safety-pill" style="font-weight:700;color:#30D158">SAFE</div>
   <div class="ar-pill">ANR · <strong id="ar-lens-label">50mm</strong></div>
   <div class="ar-legend">
     <div class="leg"><div class="leg-line" style="background:#3A9EE8"></div>plate</div>
@@ -595,6 +596,8 @@ async function openAR() {
   const session  = sessions.find(s => s.id === activeSessionId);
   if (arEngine && session) {
     arEngine.plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
+    arEngine.resize();
+    arEngine.refreshScene();
   }
   show('ar');
   // iOS Safari: motion permission must be requested from a user tap
@@ -630,6 +633,7 @@ function initAR() {
   arEngine.currentFL    = currentFL;
   arEngine.camToChar_m  = ftToM(20);
   arEngine.charToWall_m = ftToM(13);
+  arEngine.refreshScene();
   arEngine.start();
 
   window.addEventListener('resize', () => arEngine.resize());
@@ -698,6 +702,11 @@ function updateARMetrics() {
   const safeEl = document.getElementById('m-safety');
   safeEl.textContent  = safety.label;
   safeEl.style.color  = safety.color;
+  const pill = document.getElementById('ar-safety-pill');
+  if (pill) {
+    pill.textContent = safety.label;
+    pill.style.color = safety.color;
+  }
 
   const warnEl = document.getElementById('ar-warn');
   const warns  = [];
@@ -714,7 +723,10 @@ document.querySelectorAll('.lens-btn').forEach(btn => {
     btn.classList.add('active');
     currentFL = parseInt(btn.dataset.fl);
     document.getElementById('ar-lens-label').textContent = currentFL + 'mm';
-    if (arEngine) arEngine.currentFL = currentFL;
+    if (arEngine) {
+      arEngine.currentFL = currentFL;
+      arEngine.refreshScene();
+    }
   });
 });
 
@@ -794,10 +806,9 @@ document.getElementById('btn-modal-ok').addEventListener('click', () => {
     arEngine.charToWall_m = ftToM(cw);
     arEngine.wallDist_m   = ftToM(cc + cw);
     if (!arEngine.wallLocked) {
-      arEngine.anchorAlpha = arEngine.alpha;
-      arEngine.anchorBeta  = arEngine.beta;
-      arEngine.anchorGamma = arEngine.gamma;
-      arEngine.wallLocked  = true;
+      arEngine.lockWallAnchor(arEngine.wallDist_m);
+    } else {
+      arEngine.refreshScene();
     }
   }
   document.getElementById('manual-modal').style.display = 'none';

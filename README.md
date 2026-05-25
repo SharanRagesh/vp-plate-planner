@@ -10,8 +10,9 @@ AR-assisted on-location plate shoot planning for virtual production teams.
 
 Answers the key question on location: *"Will this environment work on our stage?"*
 
-- Places a virtual LED wall in AR space anchored to the real environment via gyroscope
-- Shows your 24mm plate capture boundary and on-set lens crop overlaid on the camera feed
+- Renders a **3D LED wall, ground grid, plate/crop frustums, and talent** in the live camera viewport (Three.js + gyro), similar to Unreal techvis — not a flat 2D diagram
+- Anchors the virtual stage to the real wall via gyroscope when you tap **Set Wall**
+- Shows your plate capture volume and on-set lens crop as 3D frustums receding into the scene
 - Calculates cam→wall, cam→talent, talent→wall distances in real time
 - Flags SAFE / TIGHT / RISKY / INVALID based on plate coverage vs stage lens
 - Organises work into Projects → Sessions → Setup IDs (matching real VP shoot workflow)
@@ -57,7 +58,8 @@ Answers the key question on location: *"Will this environment work on our stage?
 ## Tech stack
 
 - Vanilla JS ES modules — no build step, no framework
-- ARKit-compatible via WebXR (Safari) + DeviceOrientation API
+- **Three.js** for 3D viewport overlay on the camera feed
+- DeviceOrientation API for gyro-anchored stage (Safari motion permission)
 - PWA — installs to home screen, works offline after first load
 - All data stored locally on device (localStorage)
 - GitHub Pages hosting — free, HTTPS, permanent URL

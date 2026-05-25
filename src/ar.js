@@ -1,337 +1,436 @@
-// ── AR OVERLAY ENGINE ────────────────────────────────────────────────────────
+// ── 3D AR VIEWPORT (Three.js) ───────────────────────────────────────────────
+// Renders stage geometry in perspective through the phone camera, like Unreal techvis.
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { hfovRad, vfovRad, cropRatio, wallCoverage,
          safetyRating, mToFt } from './profiles.js';
 
+const DEG = Math.PI / 180;
+const COLORS = {
+  wall: 0xff5c35,
+  plate: 0x3a9ee8,
+  crop: 0x00e5a0,
+  talent: 0xa78bfa,
+  ground: 0x1a2332,
+  grid: 0x2a3548,
+};
+
 export class AREngine {
   constructor(canvas) {
-    this.canvas   = canvas;
-    this.ctx      = canvas.getContext('2d');
-    this.running  = false;
-    this.visible  = true;
+    this.canvas = canvas;
+    this.running = false;
+    this.visible = true;
 
-    // Device orientation (radians)
-    this.alpha = 0; this.beta = 0; this.gamma = 0;
+    this.alpha = 0;
+    this.beta = 0;
+    this.gamma = 0;
 
-    // Anchor state
-    this.wallLocked   = false;
-    this.anchorAlpha  = 0; this.anchorBeta = 0; this.anchorGamma = 0;
-    this.wallDist_m   = null;
+    this.wallLocked = false;
+    this.anchorAlpha = 0;
+    this.anchorBeta = 0;
+    this.anchorGamma = 0;
+    this._anchorQuat = new THREE.Quaternion();
+    this._deviceQuat = new THREE.Quaternion();
+    this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    this._iosFix = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0), -Math.PI / 2
+    );
 
-    // Scene params
-    this.currentFL     = 50;
-    this.camToChar_m   = 6.1;   // 20ft default
-    this.charToWall_m  = 3.96;  // 13ft default
-    this.camHeight_m   = 1.55;
-    this.stageProfile  = null;
-    this.plateCamera   = null;
-    this.stageCamera   = null;
+    this.wallDist_m = null;
+    this.currentFL = 50;
+    this.camToChar_m = 6.1;
+    this.charToWall_m = 3.96;
+    this.camHeight_m = 1.55;
+    this.stageProfile = null;
+    this.plateCamera = null;
+    this.stageCamera = null;
 
     this._frame = this._frame.bind(this);
+    this._initRenderer();
   }
 
-  // ── LIFECYCLE ─────────────────────────────────────────────────────────────
+  _initRenderer() {
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      alpha: true,
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setClearColor(0x000000, 0);
+
+    this.scene = new THREE.Scene();
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.018);
+
+    this.world = new THREE.Group();
+    this.scene.add(this.world);
+
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.05, 350);
+    this.camera.position.set(0, this.camHeight_m, 0);
+
+    this.stageGroup = new THREE.Group();
+    this.world.add(this.stageGroup);
+
+    this._buildMaterials();
+    this._buildStageMeshes();
+    this._addLights();
+  }
+
+  _buildMaterials() {
+    const wallMat = () => new THREE.MeshBasicMaterial({
+      color: COLORS.wall,
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.mats = {
+      wall: wallMat(),
+      wallEdge: new THREE.LineBasicMaterial({ color: COLORS.wall, linewidth: 2 }),
+      wallEdgeDim: new THREE.LineBasicMaterial({ color: COLORS.wall, transparent: true, opacity: 0.55 }),
+      plate: new THREE.MeshBasicMaterial({
+        color: COLORS.plate,
+        transparent: true,
+        opacity: 0.12,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+      plateLine: new THREE.LineBasicMaterial({ color: COLORS.plate, transparent: true, opacity: 0.85 }),
+      crop: new THREE.MeshBasicMaterial({
+        color: COLORS.crop,
+        transparent: true,
+        opacity: 0.14,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+      cropLine: new THREE.LineBasicMaterial({ color: COLORS.crop }),
+      talent: new THREE.MeshBasicMaterial({
+        color: COLORS.talent,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+      }),
+      talentLine: new THREE.LineBasicMaterial({ color: COLORS.talent }),
+      ground: new THREE.MeshBasicMaterial({
+        color: COLORS.ground,
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+      grid: new THREE.LineBasicMaterial({ color: COLORS.grid, transparent: true, opacity: 0.35 }),
+    };
+  }
+
+  _buildStageMeshes() {
+    this.meshes = {
+      wall: new THREE.Group(),
+      plateFrustum: new THREE.Group(),
+      cropFrustum: new THREE.Group(),
+      talent: new THREE.Group(),
+      ground: new THREE.Group(),
+    };
+    this.stageGroup.add(
+      this.meshes.ground,
+      this.meshes.wall,
+      this.meshes.plateFrustum,
+      this.meshes.cropFrustum,
+      this.meshes.talent,
+    );
+  }
+
+  _addLights() {
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.35);
+    dir.position.set(2, 8, 4);
+    this.scene.add(dir);
+  }
+
   start() {
     this.running = true;
+    this.resize();
     requestAnimationFrame(this._frame);
   }
 
   stop() { this.running = false; }
 
   resize() {
-    this.canvas.width  = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    this.renderer.setSize(W, H, false);
+    this._updateCameraFov(W / H);
   }
 
-  _frame() {
-    if (!this.running) return;
-    this._draw();
-    requestAnimationFrame(this._frame);
+  _updateCameraFov(aspect) {
+    const hFov = (this.plateCamera?.fovEquiv_deg ?? 65) * DEG;
+    const vFov = 2 * Math.atan(Math.tan(hFov / 2) / aspect);
+    this.camera.fov = (vFov * 180) / Math.PI;
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
   }
 
-  // ── ORIENTATION ───────────────────────────────────────────────────────────
   onOrientation(alpha, beta, gamma) {
-    this.alpha = alpha * Math.PI / 180;
-    this.beta  = beta  * Math.PI / 180;
-    this.gamma = gamma * Math.PI / 180;
+    this.alpha = alpha * DEG;
+    this.beta = beta * DEG;
+    this.gamma = gamma * DEG;
+  }
+
+  _deviceQuaternion() {
+    this._euler.set(this.beta, this.alpha, -this.gamma, 'YXZ');
+    this._deviceQuat.setFromEuler(this._euler);
+    this._deviceQuat.multiply(this._iosFix);
+    return this._deviceQuat;
   }
 
   lockWallAnchor(dist_m) {
-    this.wallDist_m  = dist_m;
-    this.wallLocked  = true;
+    this.wallDist_m = dist_m;
+    this.wallLocked = true;
     this.anchorAlpha = this.alpha;
-    this.anchorBeta  = this.beta;
+    this.anchorBeta = this.beta;
     this.anchorGamma = this.gamma;
+    this._anchorQuat.copy(this._deviceQuaternion());
+    this._rebuildStage();
     return true;
   }
 
   unlockWall() {
     this.wallLocked = false;
     this.wallDist_m = null;
+    this._rebuildStage();
   }
 
-  // Anchor offset in pixels relative to center
-  _anchorOffset() {
-    if (!this.wallLocked) return { dx: 0, dy: 0 };
-    const W = this.canvas.width, H = this.canvas.height;
-    const phoneFOV_H = (this.plateCamera?.fovEquiv_deg ?? 65) * Math.PI / 180;
-    const phoneFOV_V = phoneFOV_H * (H / W);
-    const fPx_x = (W / 2) / Math.tan(phoneFOV_H / 2);
-    const fPx_y = (H / 2) / Math.tan(phoneFOV_V / 2);
-
-    let da = this.alpha - this.anchorAlpha;
-    if (da >  Math.PI) da -= 2 * Math.PI;
-    if (da < -Math.PI) da += 2 * Math.PI;
-    const db = this.beta - this.anchorBeta;
-
-    return { dx: -da * fPx_x, dy: db * fPx_y };
+  _clearGroup(group) {
+    while (group.children.length) {
+      const c = group.children[0];
+      group.remove(c);
+      if (c.geometry) c.geometry.dispose();
+    }
   }
 
-  // ── PROJECTION ────────────────────────────────────────────────────────────
-  _project(xW, yW, zW, cx, camY, fPx, dx, dy) {
-    const sx = (xW / zW) * fPx + cx + dx;
-    const sy = (-yW / zW) * fPx + camY + dy;
-    return { x: sx, y: sy };
-  }
+  _rebuildStage() {
+    if (!this.stageProfile) return;
+    this._clearGroup(this.meshes.wall);
+    this._clearGroup(this.meshes.plateFrustum);
+    this._clearGroup(this.meshes.cropFrustum);
+    this._clearGroup(this.meshes.talent);
+    this._clearGroup(this.meshes.ground);
 
-  // ── DRAW ──────────────────────────────────────────────────────────────────
-  _draw() {
-    const ctx = this.ctx;
-    const W = this.canvas.width, H = this.canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    if (!this.visible || !this.stageProfile) return;
+    const wall = this.stageProfile.wall;
+    const camToW = this.wallDist_m ?? (this.camToChar_m + this.charToWall_m);
+    const camToC = this.camToChar_m;
+    const chH = this.camHeight_m;
+    const fl = this.currentFL;
 
-    const wall     = this.stageProfile.wall;
-    const fl       = this.currentFL;
-    const camToW   = (this.wallDist_m !== null)
-                     ? this.wallDist_m
-                     : this.camToChar_m + this.charToWall_m;
-    const camToC   = this.camToChar_m;
-    const chH      = this.camHeight_m;
-
-    // FOVs
     const stageHFOV = this.stageCamera
       ? hfovRad(this.stageCamera.sensorW_mm, fl) : 0.7;
     const stageVFOV = this.stageCamera
       ? vfovRad(this.stageCamera.sensorH_mm, fl) : 0.5;
     const plateHFOV = this.plateCamera
-      ? this.plateCamera.fovEquiv_deg * Math.PI / 180 : 1.29;
+      ? this.plateCamera.fovEquiv_deg * DEG : 1.29;
+    const plateVFOV = 2 * Math.atan(Math.tan(plateHFOV / 2) * 0.75);
 
-    // Safety
-    const cr = cropRatio(plateHFOV, stageHFOV);
-    const wc = wallCoverage(stageHFOV, camToW, wall.chordM);
+    const wallY0 = 0;
+    const wallY1 = wall.heightM;
+    const wallZ = -camToW;
+    const R = wall.radiusM;
+    const halfArc = (wall.arcDeg / 2) * DEG;
+    const arcSegs = 48;
 
-    // Phone / plate camera HFOV (matches live preview lens)
-    const phoneFOV = (this.plateCamera?.fovEquiv_deg ?? 65) * Math.PI / 180;
-    const fPx = (W / 2) / Math.tan(phoneFOV / 2);
+    // ── Ground plane + grid (depth cue like Unreal viewport) ───────────────
+    const groundGeo = new THREE.PlaneGeometry(80, 80);
+    const ground = new THREE.Mesh(groundGeo, this.mats.ground);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = wallY0;
+    this.meshes.ground.add(ground);
 
-    const cx   = W / 2;
-    const camY = H * 0.72;   // camera dot position on screen
-    const { dx, dy } = this._anchorOffset();
+    const grid = new THREE.GridHelper(60, 30, COLORS.grid, COLORS.grid);
+    grid.position.y = wallY0 + 0.02;
+    this.meshes.ground.add(grid);
 
-    const Z  = camToW;
-    const Zc = camToC;
-    const wallBot = -chH;
-    const wallTop = wall.heightM - chH;
-
-    const proj = (xW, yW, zW) =>
-      this._project(xW, yW, zW, cx, camY, fPx, dx, dy);
-
-    // ── LED WALL ARC ──────────────────────────────────────────────────────
-    const R         = wall.radiusM;
-    const arcCenterZ = Z + R;
-    const halfArc   = (wall.arcDeg / 2) * Math.PI / 180;
-    const ARC_SEGS  = 40;
-
-    const arcPt = t => {
-      const theta = t * halfArc;
-      return { xw: R * Math.sin(theta), zw: arcCenterZ - R * Math.cos(theta) };
+    // ── LED wall: curved mesh panels + wireframe ───────────────────────────
+    const arcCenterZ = wallZ + R;
+    const buildArcSurface = (y) => {
+      const verts = [];
+      for (let i = 0; i <= arcSegs; i++) {
+        const t = (i / arcSegs) * 2 - 1;
+        const theta = t * halfArc;
+        const x = R * Math.sin(theta);
+        const z = arcCenterZ - R * Math.cos(theta);
+        verts.push(x, y, z);
+      }
+      return verts;
     };
 
-    // Bottom arc
-    ctx.beginPath();
-    for (let i = 0; i <= ARC_SEGS; i++) {
-      const t = (i / ARC_SEGS) * 2 - 1;
-      const { xw, zw } = arcPt(t);
-      const p = proj(xw, wallBot, zw);
-      i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+    const bottom = buildArcSurface(wallY0);
+    const top = buildArcSurface(wallY1);
+    const positions = [];
+    const indices = [];
+    for (let i = 0; i < arcSegs; i++) {
+      const bi = i * 3;
+      const ti = (arcSegs + 1 + i) * 3;
+      const b0 = bottom.slice(bi, bi + 3);
+      const b1 = bottom.slice(bi + 3, bi + 6);
+      const t0 = top.slice(bi, bi + 3);
+      const t1 = top.slice(bi + 3, bi + 6);
+      const base = positions.length / 3;
+      positions.push(...b0, ...b1, ...t1, ...t0);
+      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
-    ctx.strokeStyle = '#FF5C35';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = '#FF5C35'; ctx.shadowBlur = 8;
-    ctx.stroke(); ctx.shadowBlur = 0;
+    const wallGeo = new THREE.BufferGeometry();
+    wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    wallGeo.setIndex(indices);
+    wallGeo.computeVertexNormals();
+    const wallMesh = new THREE.Mesh(wallGeo, this.mats.wall);
+    this.meshes.wall.add(wallMesh);
 
-    // Top arc
-    ctx.beginPath();
-    for (let i = 0; i <= ARC_SEGS; i++) {
-      const t = (i / ARC_SEGS) * 2 - 1;
-      const { xw, zw } = arcPt(t);
-      const p = proj(xw, wallTop, zw);
-      i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+    const edgePts = [];
+    for (const y of [wallY0, wallY1]) {
+      const row = buildArcSurface(y);
+      for (let i = 0; i < row.length; i += 3) {
+        edgePts.push(new THREE.Vector3(row[i], row[i + 1], row[i + 2]));
+      }
     }
-    ctx.strokeStyle = 'rgba(255,92,53,0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePts);
+    const edgeLine = new THREE.Line(edgeGeo, this.mats.wallEdge);
+    this.meshes.wall.add(edgeLine);
 
-    // Vertical sides
-    const pBL = proj(-wall.chordM/2, wallBot, Z);
-    const pTL = proj(-wall.chordM/2, wallTop, Z);
-    const pBR = proj( wall.chordM/2, wallBot, Z);
-    const pTR = proj( wall.chordM/2, wallTop, Z);
-    ctx.beginPath();
-    ctx.moveTo(pBL.x,pBL.y); ctx.lineTo(pTL.x,pTL.y);
-    ctx.moveTo(pBR.x,pBR.y); ctx.lineTo(pTR.x,pTR.y);
-    ctx.strokeStyle = 'rgba(255,92,53,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
-
-    // Wall label
-    const wlp = proj(0, wallTop + 0.25, Z);
-    ctx.fillStyle = 'rgba(255,92,53,0.9)';
-    ctx.font = '500 11px -apple-system,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`LED WALL · ${wall.arcFt}ft arc · ${wall.chordFt}ft chord`, wlp.x, wlp.y);
-
-    // ── PLATE BOUNDARY (24mm) ─────────────────────────────────────────────
-    const plateH = Z * Math.tan(plateHFOV / 2);
-    const plateVH = Z * Math.tan((plateHFOV * 0.562) / 2); // approx V from 3:2
-
-    const pp = [
-      proj(-plateH,  wallTop, Z), proj( plateH,  wallTop, Z),
-      proj( plateH,  wallBot, Z), proj(-plateH,  wallBot, Z),
+    // Vertical chord edges at wall plane
+    const chordHalf = wall.chordM / 2;
+    const sideVerts = [
+      new THREE.Vector3(-chordHalf, wallY0, wallZ),
+      new THREE.Vector3(-chordHalf, wallY1, wallZ),
+      new THREE.Vector3(chordHalf, wallY0, wallZ),
+      new THREE.Vector3(chordHalf, wallY1, wallZ),
     ];
-    ctx.beginPath();
-    ctx.moveTo(pp[0].x,pp[0].y);
-    pp.forEach(p => ctx.lineTo(p.x,p.y));
-    ctx.closePath();
-    ctx.strokeStyle = '#3A9EE8';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#3A9EE8'; ctx.shadowBlur = 8;
-    ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(58,158,232,0.04)'; ctx.fill();
+    const sideGeo = new THREE.BufferGeometry().setFromPoints([
+      sideVerts[0], sideVerts[1],
+      sideVerts[2], sideVerts[3],
+    ]);
+    const sideLine = new THREE.LineSegments(sideGeo, this.mats.wallEdgeDim);
+    this.meshes.wall.add(sideLine);
 
-    // Rays from camera
-    const camPx = { x: cx + dx, y: camY + dy };
-    ctx.beginPath();
-    ctx.moveTo(camPx.x,camPx.y); ctx.lineTo(pp[0].x,pp[0].y);
-    ctx.moveTo(camPx.x,camPx.y); ctx.lineTo(pp[1].x,pp[1].y);
-    ctx.strokeStyle = 'rgba(58,158,232,0.3)'; ctx.lineWidth = 1.2;
-    ctx.stroke();
+    // ── Plate + crop frustums (3D cones to wall distance) ──────────────────
+    const addFrustum = (group, hFov, vFov, colorMat, lineMat, dist) => {
+      const hw = Math.tan(hFov / 2) * dist;
+      const hh = Math.tan(vFov / 2) * dist;
+      const z = -dist;
+      const corners = [
+        new THREE.Vector3(-hw, chH + hh, z),
+        new THREE.Vector3(hw, chH + hh, z),
+        new THREE.Vector3(hw, chH - hh, z),
+        new THREE.Vector3(-hw, chH - hh, z),
+      ];
+      const cam = new THREE.Vector3(0, chH, 0);
+      const faces = new THREE.BufferGeometry();
+      const fPos = [];
+      for (let i = 0; i < 4; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % 4];
+        fPos.push(cam.x, cam.y, cam.z, a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+      faces.setAttribute('position', new THREE.Float32BufferAttribute(fPos, 3));
+      group.add(new THREE.Mesh(faces, colorMat));
 
-    ctx.fillStyle = 'rgba(58,158,232,0.85)';
-    ctx.font = '500 10px -apple-system,sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${this.plateCamera?.shortName || '24mm'} plate`, pp[0].x + 4, pp[0].y - 4);
+      const lines = [];
+      for (const c of corners) lines.push(cam, c);
+      for (let i = 0; i < 4; i++) lines.push(corners[i], corners[(i + 1) % 4]);
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(lines);
+      group.add(new THREE.LineSegments(lineGeo, lineMat));
+    };
 
-    // ── STAGE LENS CROP ───────────────────────────────────────────────────
-    const onH  = Z * Math.tan(stageHFOV / 2);
-    const onVH = Z * Math.tan(stageVFOV / 2);
-    const clampTop = Math.min(wallTop, onVH - chH);
-    const clampBot = Math.max(wallBot, -onVH - chH);
+    addFrustum(
+      this.meshes.plateFrustum,
+      plateHFOV,
+      plateVFOV,
+      this.mats.plate,
+      this.mats.plateLine,
+      camToW,
+    );
+    addFrustum(
+      this.meshes.cropFrustum,
+      stageHFOV,
+      stageVFOV,
+      this.mats.crop,
+      this.mats.cropLine,
+      camToW,
+    );
 
-    const cp = [
-      proj(-onH, clampTop, Z), proj( onH, clampTop, Z),
-      proj( onH, clampBot, Z), proj(-onH, clampBot, Z),
-    ];
-    ctx.beginPath();
-    ctx.moveTo(cp[0].x,cp[0].y);
-    cp.forEach(p => ctx.lineTo(p.x,p.y));
-    ctx.closePath();
-    ctx.strokeStyle = '#00E5A0';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = '#00E5A0'; ctx.shadowBlur = 10;
-    ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0,229,160,0.05)'; ctx.fill();
+    // ── Talent zone at cam→talent depth ────────────────────────────────────
+    const tZ = -camToC;
+    const tHalf = Math.tan(stageHFOV / 2) * camToC * 0.45;
+    const tY0 = 0;
+    const tY1 = 1.75;
 
-    ctx.beginPath();
-    ctx.moveTo(camPx.x,camPx.y); ctx.lineTo(cp[0].x,cp[0].y);
-    ctx.moveTo(camPx.x,camPx.y); ctx.lineTo(cp[1].x,cp[1].y);
-    ctx.strokeStyle = 'rgba(0,229,160,0.28)'; ctx.lineWidth = 1;
-    ctx.setLineDash([6,5]); ctx.stroke(); ctx.setLineDash([]);
+    const talentPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(tHalf * 2, 0.08),
+      this.mats.talent,
+    );
+    talentPlane.position.set(0, 0.04, tZ);
+    talentPlane.rotation.x = -Math.PI / 2;
+    this.meshes.talent.add(talentPlane);
 
-    ctx.fillStyle = '#00E5A0';
-    ctx.font = '600 10px -apple-system,sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${fl}mm crop`, cp[1].x - 4, cp[1].y - 4);
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.28, 1.55, 10),
+      this.mats.talent,
+    );
+    body.position.set(0, tY0 + 0.85, tZ);
+    this.meshes.talent.add(body);
 
-    // ── TALENT ZONE ───────────────────────────────────────────────────────
-    const tHalf = Zc * Math.tan(stageHFOV / 2) * 0.45;
-    const tGnd  = wallBot + 0.15;
-    const tHead = tGnd + 1.75;
-    const tL = proj(-tHalf, tGnd, Zc);
-    const tR = proj( tHalf, tGnd, Zc);
-    const tC = proj(0, tHead * 0.5, Zc);
-    const tTop = proj(0, tHead, Zc);
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 12, 10),
+      this.mats.talent,
+    );
+    head.position.set(0, tY1 - 0.1, tZ);
+    this.meshes.talent.add(head);
 
-    // Ground line
-    ctx.beginPath(); ctx.moveTo(tL.x,tL.y); ctx.lineTo(tR.x,tR.y);
-    ctx.strokeStyle = '#A78BFA'; ctx.lineWidth = 2;
-    ctx.shadowColor = '#A78BFA'; ctx.shadowBlur = 8;
-    ctx.stroke(); ctx.shadowBlur = 0;
-
-    // Figure
-    const figH = Math.abs(tTop.y - tL.y);
-    const headR = Math.max(8, figH * 0.12);
-    ctx.beginPath();
-    ctx.arc(tC.x, tTop.y + headR, headR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(167,139,250,0.18)'; ctx.fill();
-    ctx.strokeStyle = '#A78BFA'; ctx.lineWidth = 1.5;
-    ctx.shadowColor = '#A78BFA'; ctx.shadowBlur = 6;
-    ctx.stroke(); ctx.shadowBlur = 0;
-
-    ctx.beginPath();
-    ctx.moveTo(tC.x, tTop.y + headR * 2);
-    ctx.lineTo(tC.x, tL.y);
-    ctx.strokeStyle = 'rgba(167,139,250,0.6)'; ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.fillStyle = '#A78BFA';
-    ctx.font = '600 10px -apple-system,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('TALENT', tC.x, tTop.y - 4);
-
-    // ── CAMERA DOT ────────────────────────────────────────────────────────
-    ctx.beginPath();
-    ctx.arc(camPx.x, camPx.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(148,163,184,0.85)'; ctx.fill();
-
-    // ── DIMENSION ANNOTATIONS ─────────────────────────────────────────────
-    const dimX = W - 36;
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
-    ctx.fillStyle   = 'rgba(255,255,255,0.5)';
-    ctx.font = '10px -apple-system,sans-serif';
-    ctx.textAlign = 'left';
-
-    const wallPx  = proj(wall.chordM/2, wallBot, Z);
-    const charPx  = proj(wall.chordM/2, wallBot, Zc);
-
-    ctx.beginPath();
-    ctx.moveTo(dimX, camY); ctx.lineTo(dimX, charPx.y); ctx.stroke();
-    ctx.fillText(`${mToFt(camToC).toFixed(0)}ft`, dimX + 3, (camY + charPx.y)/2 + 4);
-
-    ctx.beginPath();
-    ctx.moveTo(dimX, charPx.y); ctx.lineTo(dimX, wallPx.y); ctx.stroke();
-    ctx.fillText(`${mToFt(this.charToWall_m).toFixed(0)}ft`, dimX + 3, (charPx.y + wallPx.y)/2 + 4);
-
-    // ── SAFETY HUD ────────────────────────────────────────────────────────
-    const safety = safetyRating(cr, wc);
-    ctx.fillStyle = safety.color + 'CC';
-    roundRect(ctx, 14, 14, 88, 30, 8); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 13px -apple-system,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(safety.label, 58, 34);
+    const talentWire = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(tHalf * 2, 1.75, 0.5)),
+      this.mats.talentLine,
+    );
+    talentWire.position.set(0, tY0 + 0.88, tZ);
+    this.meshes.talent.add(talentWire);
   }
-}
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
-  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);
-  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);
-  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);
-  ctx.quadraticCurveTo(x,y,x+r,y);
-  ctx.closePath();
+  _updateCameraPose() {
+    const q = this._deviceQuaternion();
+    if (!this.wallLocked) {
+      // Preview: LED wall stays centred in view while you aim to lock
+      this.camera.quaternion.copy(q);
+      this.world.quaternion.copy(q).invert();
+      return;
+    }
+
+    // Locked: world stays fixed in real space; phone rotation pans the view
+    this.camera.quaternion.copy(q);
+    const invAnchor = this._anchorQuat.clone().invert();
+    this.world.quaternion.copy(this._anchorQuat).invert().multiply(q);
+    this.world.position.set(0, 0, 0);
+  }
+
+  _frame() {
+    if (!this.running) return;
+    if (this.visible && this.stageProfile) {
+      this._updateCameraPose();
+      this.renderer.render(this.scene, this.camera);
+    } else {
+      this.renderer.clear();
+    }
+    requestAnimationFrame(this._frame);
+  }
+
+  /** Called when lens or distances change */
+  refreshScene() {
+    this._rebuildStage();
+  }
+
+  getSafety() {
+    if (!this.stageProfile) return { label: '—', color: '#888' };
+    const camToW = this.wallDist_m ?? (this.camToChar_m + this.charToWall_m);
+    const fl = this.currentFL;
+    const plateHFOV = this.plateCamera?.fovEquiv_deg * DEG || 1.29;
+    const stageHFOV = this.stageCamera
+      ? hfovRad(this.stageCamera.sensorW_mm, fl) : 0.7;
+    const cr = cropRatio(plateHFOV, stageHFOV);
+    const wc = wallCoverage(stageHFOV, camToW, this.stageProfile.wall.chordM);
+    return safetyRating(cr, wc);
+  }
 }

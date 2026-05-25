@@ -1,4 +1,4 @@
-const CACHE = 'vp-planner-v4';
+const CACHE = 'vp-planner-v5';
 const ASSETS = [
   '/vp-plate-planner/',
   '/vp-plate-planner/index.html',

@@ -177,9 +177,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
     </div>
     <div class="sliders">
       <div class="sl-row">
-        <div class="sl-lbl">Cam height</div>
-        <input type="range" id="sl-cam-h" min="0.5" max="3.0" value="1.55" step="0.05">
-        <div class="sl-val"><span id="sv-cam-h">5.1</span>ft</div>
+        <div class="sl-lbl">Wall front/back</div>
+        <input type="range" id="sl-wall-offset" min="-1.5" max="1.5" value="0" step="0.1">
+        <div class="sl-val"><span id="sv-wall-offset">0.0</span>m</div>
       </div>
       <div class="sl-row">
         <div class="sl-lbl">Talent→Wall</div>
@@ -209,7 +209,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
       <div class="ar-metric-sep"></div>
       <div class="ar-metric"><div class="ar-metric-val" id="m-wallcov">—</div><div class="ar-metric-lbl">Wall used</div></div>
       <div class="ar-metric-sep"></div>
-      <div class="ar-metric"><div class="ar-metric-val" id="m-camh">—</div><div class="ar-metric-lbl">Cam height</div></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-camh">—</div><div class="ar-metric-lbl">Cam height (auto)</div></div>
     </div>
   </div>
 </div>
@@ -218,7 +218,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 <div class="modal-wrap" id="manual-modal">
   <div class="modal-sheet">
     <div class="modal-title">Manual distances</div>
-    <div class="modal-sub">Enter measured distances. Wall and mannequin lock to ground.</div>
+    <div class="modal-sub">Enter measured distances. Camera height is auto-derived from wall lock.</div>
     <div class="modal-sl">
       <label>Cam → Talent</label>
       <input type="range" id="mm-ct" min="5" max="50" value="20" step="1">
@@ -389,6 +389,7 @@ function safety(cr,wc){
   if(cr>0.82) return {label:'TIGHT',  color:'#FFD60A'};
   return              {label:'SAFE',   color:'#30D158'};
 }
+function camToWallM(){ return Math.max(0.5, camToChar_m + charToWall_m + wallOffset_m); }
  
 // ════════════════════════════════════════════════════════════════
 // SESSION STORAGE
@@ -412,6 +413,7 @@ let activeProjId=null, activeSessId=null;
 let currentFL=50, overlayOn=true, settingWall=false;
 let wallLocked=false, wallDist_m=null;
 let camToChar_m=ftToM(20), charToWall_m=ftToM(13), camHeight_m=1.55;
+let wallOffset_m=0;
 let gyroAlpha=0, gyroBeta=0, gyroGamma=0;
 let anchorAlpha=0, anchorBeta=0, anchorGamma=0;
 let plateHFOV = PLATE_CAMS.IPHONE_17_PRO_MAX.hfov;
@@ -650,7 +652,7 @@ function updateFrustums(){
   if(!frustumGroup) return;
   frustumGroup.clear();
  
-  const camDist = camToChar_m + charToWall_m; // cam to wall
+  const camDist = camToWallM(); // cam to wall
   const Z = camDist; // wall Z in world space (cam at 0)
   const Zc = camToChar_m;
  
@@ -700,7 +702,7 @@ function drawFrustum(hfovR, vfovR, dist, color, opacity, dashed){
 function updateScene(){
   if(!threeReady) return;
  
-  const camDist = camToChar_m + charToWall_m;
+  const camDist = camToWallM();
  
   // Wall sits at Z = camDist from camera (camera at origin)
   // Wall centre is at (0, 0, camDist), bottom at Y=0 (ground)
@@ -770,7 +772,7 @@ async function startCamera(){
 // HUD UPDATES
 // ════════════════════════════════════════════════════════════════
 function updateHUD(){
-  const camToW = camToChar_m + charToWall_m;
+  const camToW = camToWallM();
   const cr = cropR(plateHFOV, currentFL);
   const wc = wallCov(currentFL, camToW);
   const s  = safety(cr, wc);
@@ -782,9 +784,9 @@ function updateHUD(){
   document.getElementById('m-crop').textContent= Math.round(cr*100)+'%';
   document.getElementById('m-wallcov').textContent=Math.round(wc*100)+'%';
   document.getElementById('m-camh').textContent= mToFt(camHeight_m)+'ft';
-  document.getElementById('sv-cam-h').textContent= mToFt(camHeight_m);
+  document.getElementById('sv-wall-offset').textContent= wallOffset_m.toFixed(1);
   document.getElementById('sv-char-wall').textContent= Math.round(mToFt(charToWall_m));
-  document.getElementById('sv-cam-char').textContent=  Math.round(mToFt(camToChar_m));
+  document.getElementById('sv-cam-char').textContent= Math.round(mToFt(camToChar_m));
  
   const sl=document.getElementById('safety-label');
   sl.textContent=s.label; sl.style.color=s.color;
@@ -800,10 +802,10 @@ function updateHUD(){
 // ════════════════════════════════════════════════════════════════
 // SLIDERS
 // ════════════════════════════════════════════════════════════════
-document.getElementById('sl-cam-h').addEventListener('input',function(){
-  camHeight_m=parseFloat(this.value);
-  document.getElementById('sv-cam-h').textContent=mToFt(camHeight_m);
-  if(threeReady){ camera3d.position.y=camHeight_m; updateFrustums(); updateHUD(); }
+document.getElementById('sl-wall-offset').addEventListener('input',function(){
+  wallOffset_m=parseFloat(this.value);
+  document.getElementById('sv-wall-offset').textContent=wallOffset_m.toFixed(1);
+  updateScene();
 });
 document.getElementById('sl-char-wall').addEventListener('input',function(){
   charToWall_m=parseFloat(this.value);
@@ -851,6 +853,7 @@ tapLayer.addEventListener('click',()=>{
   tapLayer.style.pointerEvents='none';
   anchorAlpha=gyroAlpha; anchorBeta=gyroBeta; anchorGamma=gyroGamma;
   wallLocked=true;
+  estimateCameraHeightFromWallLock();
   document.getElementById('btn-set-wall').textContent='✓ Wall locked';
   document.getElementById('btn-set-wall').className='ar-btn set';
   // Open manual modal for distances
@@ -876,9 +879,10 @@ document.getElementById('mm-ok').addEventListener('click',()=>{
   const ct=parseInt(document.getElementById('mm-ct').value);
   const tw=parseInt(document.getElementById('mm-tw').value);
   camToChar_m=ftToM(ct); charToWall_m=ftToM(tw);
-  wallDist_m=camToChar_m+charToWall_m;
+  wallDist_m=camToWallM();
   wallLocked=true;
   anchorAlpha=gyroAlpha; anchorBeta=gyroBeta; anchorGamma=gyroGamma;
+  estimateCameraHeightFromWallLock();
   document.getElementById('sl-cam-char').value=camToChar_m;
   document.getElementById('sl-char-wall').value=charToWall_m;
   document.getElementById('manual-modal').style.display='none';
@@ -896,7 +900,7 @@ document.getElementById('setup-cancel').addEventListener('click',()=>{
   document.getElementById('setup-modal').style.display='none';
 });
 document.getElementById('setup-save').addEventListener('click',()=>{
-  const camToW=camToChar_m+charToWall_m;
+  const camToW=camToWallM();
   const cr=cropR(plateHFOV,currentFL), wc=wallCov(currentFL,camToW), s=safety(cr,wc);
   createSetup(activeProjId,activeSessId,{
     type:document.getElementById('setup-type').value,
@@ -944,7 +948,7 @@ document.getElementById('btn-capture').addEventListener('click',async()=>{
   ctx.fillStyle='rgba(8,10,14,0.9)'; ctx.fillRect(0,H-panH,W,panH);
   ctx.fillStyle='#3A9EE8'; ctx.fillRect(0,H-panH,W,3);
  
-  const camToW=camToChar_m+charToWall_m;
+  const camToW=camToWallM();
   const cr=cropR(plateHFOV,currentFL),wc=wallCov(currentFL,camToW),s=safety(cr,wc);
  
   ctx.fillStyle=s.color; ctx.font='bold 14px Arial'; ctx.textAlign='right';
@@ -1027,6 +1031,15 @@ function onOrient(e){
   gyroAlpha=(e.alpha||0)*Math.PI/180;
   gyroBeta =(e.beta ||0)*Math.PI/180;
   gyroGamma=(e.gamma||0)*Math.PI/180;
+}
+
+function estimateCameraHeightFromWallLock(){
+  const camToW = camToWallM();
+  const wallCenterY = WALL_H_M * 0.5;
+  const est = wallCenterY + Math.tan(anchorBeta) * camToW;
+  if(Number.isFinite(est)){
+    camHeight_m = Math.max(0.3, Math.min(3.0, est));
+  }
 }
  
 // ════════════════════════════════════════════════════════════════

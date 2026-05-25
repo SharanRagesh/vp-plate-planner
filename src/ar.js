@@ -3,10 +3,14 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { hfovRad, vfovRad, cropRatio, wallCoverage,
          safetyRating, mToFt } from './profiles.js';
+import {
+  createLedWallMaterial,
+  createLedWallEdgeMaterial,
+  tickLedWallMaterial,
+} from './led-wall-shader.js';
 
 const DEG = Math.PI / 180;
 const COLORS = {
-  wall: 0xff5c35,
   plate: 0x3a9ee8,
   crop: 0x00e5a0,
   talent: 0xa78bfa,
@@ -44,6 +48,7 @@ export class AREngine {
     this.plateCamera = null;
     this.stageCamera = null;
 
+    this._clock = new THREE.Clock();
     this._frame = this._frame.bind(this);
     this._initRenderer();
   }
@@ -76,17 +81,14 @@ export class AREngine {
   }
 
   _buildMaterials() {
-    const wallMat = () => new THREE.MeshBasicMaterial({
-      color: COLORS.wall,
-      transparent: true,
-      opacity: 0.42,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
+    const wall = this.stageProfile?.wall;
     this.mats = {
-      wall: wallMat(),
-      wallEdge: new THREE.LineBasicMaterial({ color: COLORS.wall, linewidth: 2 }),
-      wallEdgeDim: new THREE.LineBasicMaterial({ color: COLORS.wall, transparent: true, opacity: 0.55 }),
+      wall: createLedWallMaterial({
+        rows: wall?.resH ? Math.min(wall.resH / 8, 320) : 280,
+        cols: wall?.resW ? Math.min(wall.resW / 144, 64) : 48,
+      }),
+      wallEdge: createLedWallEdgeMaterial(),
+      wallEdgeDim: createLedWallEdgeMaterial(),
       plate: new THREE.MeshBasicMaterial({
         color: COLORS.plate,
         transparent: true,
@@ -263,20 +265,24 @@ export class AREngine {
     const bottom = buildArcSurface(wallY0);
     const top = buildArcSurface(wallY1);
     const positions = [];
+    const uvs = [];
     const indices = [];
     for (let i = 0; i < arcSegs; i++) {
+      const u0 = i / arcSegs;
+      const u1 = (i + 1) / arcSegs;
       const bi = i * 3;
-      const ti = (arcSegs + 1 + i) * 3;
       const b0 = bottom.slice(bi, bi + 3);
       const b1 = bottom.slice(bi + 3, bi + 6);
       const t0 = top.slice(bi, bi + 3);
       const t1 = top.slice(bi + 3, bi + 6);
       const base = positions.length / 3;
       positions.push(...b0, ...b1, ...t1, ...t0);
+      uvs.push(u0, 0, u1, 0, u1, 1, u0, 1);
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
     const wallGeo = new THREE.BufferGeometry();
     wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    wallGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     wallGeo.setIndex(indices);
     wallGeo.computeVertexNormals();
     const wallMesh = new THREE.Mesh(wallGeo, this.mats.wall);
@@ -409,6 +415,7 @@ export class AREngine {
   _frame() {
     if (!this.running) return;
     if (this.visible && this.stageProfile) {
+      tickLedWallMaterial(this.mats.wall, this._clock.getElapsedTime());
       this._updateCameraPose();
       this.renderer.render(this.scene, this.camera);
     } else {
@@ -419,6 +426,11 @@ export class AREngine {
 
   /** Called when lens or distances change */
   refreshScene() {
+    const w = this.stageProfile?.wall;
+    if (w && this.mats.wall?.uniforms) {
+      this.mats.wall.uniforms.uRows.value = Math.min(w.resH / 8, 320);
+      this.mats.wall.uniforms.uCols.value = Math.min(w.resW / 144, 64);
+    }
     this._rebuildStage();
   }
 

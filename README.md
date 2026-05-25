@@ -55,10 +55,27 @@ Answers the key question on location: *"Will this environment work on our stage?
 8. Tap **Save Setup** to record framing into the session
 9. Tap **⬤ Capture** to export an annotated techvis JPG
 
+## LED wall look (Unreal techvis)
+
+The virtual wall uses a **green emissive shader** (`src/led-wall-shader.js`): translucent additive glow, LED row bands, cabinet seams, and fresnel edges — similar to the green LED volume in Unreal techvis.
+
+## Sync to GitHub Desktop folder
+
+If your clone lives under `~/Documents/GitHub/`:
+
+```bash
+cd /Users/sharan/Downloads/vp-plate-planner   # or your working copy
+chmod +x sync-to-github-desktop.sh
+./sync-to-github-desktop.sh ~/Documents/GitHub/vp-plate-planner
+```
+
+Then open that folder in **GitHub Desktop** → commit → push.
+
 ## Tech stack
 
 - Vanilla JS ES modules — no build step, no framework
 - **Three.js** for 3D viewport overlay on the camera feed
+- Custom GLSL shader for the LED wall volume
 - DeviceOrientation API for gyro-anchored stage (Safari motion permission)
 - PWA — installs to home screen, works offline after first load
 - All data stored locally on device (localStorage)

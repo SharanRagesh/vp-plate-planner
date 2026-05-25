@@ -7,194 +7,165 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="VP Planner">
 <meta name="theme-color" content="#0A0C0F">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>VP Plate Planner</title>
 <style>
-/* ── RESET + TOKENS ──────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --plate:#3A9EE8; --crop:#00E5A0; --wall:#FF5C35; --talent:#A78BFA;
-  --safe:#30D158;  --tight:#FFD60A; --risky:#FF9500; --invalid:#FF3B30;
-  --bg:#0A0C0F; --bg2:#0F1218; --bg3:#161B24;
+  --plate:#3A9EE8;--crop:#00E5A0;--wall:#FF5C35;--talent:#A78BFA;
+  --safe:#30D158;--tight:#FFD60A;--risky:#FF9500;--invalid:#FF3B30;
+  --bg:#0A0C0F;--bg2:#0F1218;--bg3:#161B24;
   --border:rgba(255,255,255,0.09);
-  --text:#F0EDE8; --muted:rgba(240,237,232,0.45); --dim:rgba(240,237,232,0.2);
-  --accent:#3A9EE8;
-  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
-  --mono:'SF Mono','Fira Mono',monospace;
+  --text:#F0EDE8;--muted:rgba(240,237,232,0.45);
+  --font:-apple-system,BlinkMacSystemFont,sans-serif;
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bot:env(safe-area-inset-bottom,0px);
 }
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:var(--font);color:var(--text)}
-
-/* ── LAYERS ──────────────────────────────────────────────────────────────── */
-#video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-#ar-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;background:transparent}
-#tap-layer{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:manipulation}
-#tap-layer.active{z-index:25;pointer-events:auto;cursor:crosshair}
-#tap-hint,#crosshair{pointer-events:none}
-#tap-layer.wall-setting{z-index:25;pointer-events:all;touch-action:none}
-
-/* ── SCREEN SYSTEM ───────────────────────────────────────────────────────── */
-.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-bot) + 16px)}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var(--font);color:var(--text)}
+ 
+/* ── SCREENS ── */
+.screen{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
 .screen.active{display:flex}
-/* AR mode: empty screen must not cover camera / WebGL (was causing blank view) */
-#screen-ar{background:transparent !important;pointer-events:none;z-index:0;padding:0;overflow:visible}
+#screen-ar{background:transparent!important;z-index:3}
 #screen-ar.active{display:block}
-.screen-inner{flex:1;display:flex;flex-direction:column;padding:calc(var(--safe-top) + 16px) 16px 0}
-
-/* ── NAV BAR ─────────────────────────────────────────────────────────────── */
-.nav-bar{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-top) + 10px) 16px 10px;min-height:calc(var(--safe-top) + 52px);flex-shrink:0}
-.nav-title{font-size:17px;font-weight:600;letter-spacing:-0.01em}
-.nav-btn{font-size:15px;color:var(--accent);background:none;border:none;padding:6px 0;cursor:pointer;font-family:var(--font)}
-.nav-btn.right{text-align:right}
-
-/* ── TYPOGRAPHY ──────────────────────────────────────────────────────────── */
-.section-title{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:20px 0 8px}
-.page-title{font-size:28px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;margin-bottom:6px}
-.page-sub{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:24px}
-
-/* ── CARDS ───────────────────────────────────────────────────────────────── */
-.card{background:var(--bg3);border:0.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:8px}
-.card-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+ 
+/* ── THREE CANVAS ── */
+#three-canvas{position:fixed;inset:0;z-index:1;width:100%!important;height:100%!important}
+ 
+/* ── NAV ── */
+.nav-bar{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-top) + 10px) 16px 10px;flex-shrink:0;background:var(--bg)}
+.nav-title{font-size:17px;font-weight:600}
+.nav-btn{font-size:15px;color:var(--plate);background:none;border:none;padding:6px 0;cursor:pointer;font-family:var(--font)}
+ 
+/* ── CARDS / FORMS ── */
+.section-title{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding:0 16px}
+.card{background:var(--bg3);border:0.5px solid var(--border);border-radius:14px;padding:14px 16px;margin:0 16px 8px;cursor:pointer}
 .card-label{font-size:15px;font-weight:500}
-.card-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.card-meta{font-size:12px;color:var(--dim);font-family:var(--mono)}
-.card-badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;background:rgba(58,158,232,0.15);color:var(--accent)}
-.card-chevron{color:var(--dim);font-size:18px;flex-shrink:0}
-.card button{background:none;border:none;width:100%;text-align:left;cursor:pointer;color:inherit}
-
-/* ── FORM ELEMENTS ───────────────────────────────────────────────────────── */
-.form-group{margin-bottom:16px}
-.form-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block}
-.form-input{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none}
-.form-input:focus{border-color:var(--accent)}
-.form-select{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
-
-/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
-.btn{display:block;width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:500;font-family:var(--font);cursor:pointer;text-align:center;transition:opacity 0.15s}
-.btn:active{opacity:0.7}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-secondary{background:var(--bg3);border:0.5px solid var(--border);color:var(--text)}
-.btn-danger{background:rgba(255,59,48,0.15);border:0.5px solid rgba(255,59,48,0.3);color:#FF3B30}
-.btn-sm{padding:9px 16px;font-size:14px;border-radius:10px;width:auto;display:inline-block}
-.btn-row{display:flex;gap:10px;margin-top:8px}
-.btn-row .btn{flex:1}
-
-/* ── AR UI ────────────────────────────────────────────────────────────────── */
-#ar-top{position:fixed;top:var(--safe-top);left:0;right:0;z-index:30;display:flex;justify-content:space-between;align-items:flex-start;padding:8px 12px;gap:8px;pointer-events:none}
-.ar-pill{background:rgba(8,10,14,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted);pointer-events:all}
-.ar-pill strong{color:var(--accent)}
-.ar-legend{background:rgba(8,10,14,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 10px;display:flex;gap:8px;align-items:center}
-.leg{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
-.leg-line{width:12px;height:2px;border-radius:1px}
-
-#ar-dist{position:fixed;z-index:30;left:12px;right:12px;display:flex;gap:8px}
-.dist-card{flex:1;background:rgba(8,10,14,0.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:0.5px solid var(--border);border-radius:12px;padding:7px 10px;text-align:center}
-.dist-val{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
-.dist-unit{font-size:9px;color:var(--muted);margin-left:1px}
-.dist-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
-.dist-tap{cursor:pointer}
-.dist-tap:active{opacity:0.7}
-
-/* ── CROSSHAIR ────────────────────────────────────────────────────────────── */
-#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:28;pointer-events:none;display:none}
-.ch-ring{width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.7);position:relative;display:flex;align-items:center;justify-content:center}
-.ch-dot{width:5px;height:5px;border-radius:50%;background:#fff;position:absolute}
-#tap-hint{position:fixed;top:calc(50% + 42px);left:50%;transform:translateX(-50%);z-index:28;background:rgba(8,10,14,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:0.5px solid var(--border);border-radius:20px;padding:6px 16px;font-size:12px;color:var(--muted);display:none;white-space:nowrap}
-
-/* ── BOTTOM AR PANEL ─────────────────────────────────────────────────────── */
-#ar-bottom{position:fixed;z-index:30;bottom:0;left:0;right:0}
-#ar-bottom.wall-setting{pointer-events:none;opacity:0.55}
-.ar-panel{background:rgba(8,10,14,0.9);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid var(--border);padding:10px 12px calc(var(--safe-bot) + 8px)}
-.lens-row{display:flex;gap:7px;margin-bottom:10px;justify-content:center}
-.lens-btn{flex:1;max-width:62px;padding:9px 0;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--muted);font-size:13px;font-weight:500;text-align:center;cursor:pointer;transition:all 0.15s;font-family:var(--font)}
-.lens-btn span{display:block;font-size:9px;opacity:0.7;margin-top:1px}
-.lens-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.action-row{display:flex;gap:7px;margin-bottom:10px}
-.ar-btn{flex:1;padding:9px 6px;border-radius:10px;border:0.5px solid var(--border);background:rgba(255,255,255,0.05);color:var(--muted);font-size:12px;font-weight:500;text-align:center;cursor:pointer;font-family:var(--font);letter-spacing:0.01em;transition:all 0.15s}
-.ar-btn.on{border-color:rgba(0,229,160,0.4);color:var(--crop)}
-.ar-btn.warn-btn{border-color:rgba(255,92,53,0.35);color:var(--wall)}
-.ar-metrics{display:flex;border-top:0.5px solid var(--border);padding-top:9px}
-.ar-metric{flex:1;text-align:center}
-.ar-metric-val{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1;margin-bottom:2px}
-.ar-metric-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
-.ar-metric-sep{width:0.5px;background:var(--border);align-self:stretch}
-#ar-warn{display:none;background:rgba(255,92,53,0.12);border:0.5px solid rgba(255,92,53,0.4);border-radius:8px;padding:6px 12px;font-size:11px;color:#FF8A6E;margin-bottom:8px;text-align:center}
-
-/* ── MANUAL MODAL ─────────────────────────────────────────────────────────── */
-#manual-modal{position:fixed;inset:0;z-index:70;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.6)}
-.modal-sheet{background:#0F1318;border-radius:20px 20px 0 0;border:0.5px solid var(--border);padding:20px 16px calc(var(--safe-bot) + 20px);width:100%;max-width:480px}
-.modal-title{font-size:17px;font-weight:600;margin-bottom:4px}
-.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
-.modal-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.modal-lbl{font-size:11px;color:var(--muted);min-width:110px;text-transform:uppercase;letter-spacing:0.04em}
-.modal-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
-.modal-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
-.modal-val{font-size:13px;font-weight:500;min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
-.modal-actions{display:flex;gap:10px;margin-top:20px}
-
-/* ── SETUP MODAL ──────────────────────────────────────────────────────────── */
-#setup-modal{position:fixed;inset:0;z-index:70;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.6);overflow-y:auto}
-.setup-sheet{background:#0F1318;border-radius:20px 20px 0 0;border:0.5px solid var(--border);padding:20px 16px calc(var(--safe-bot) + 20px);width:100%;max-width:480px}
-
-/* ── FLASH ────────────────────────────────────────────────────────────────── */
-#flash{position:fixed;inset:0;z-index:100;background:#fff;opacity:0;pointer-events:none;transition:opacity 0.08s}
-
-/* ── EMPTY STATE ──────────────────────────────────────────────────────────── */
-.empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+.card-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.card-meta{font-size:11px;color:rgba(240,237,232,0.25);margin-top:2px;font-family:var(--font)}
+.card-row{display:flex;align-items:center;justify-content:space-between}
+.chevron{color:var(--muted);font-size:18px}
+.form-group{margin:0 16px 14px}
+.form-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:block}
+.form-input{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none}
+.form-select{width:100%;padding:13px 14px;background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-family:var(--font);outline:none;-webkit-appearance:none}
+.btn{display:block;width:calc(100% - 32px);margin:0 16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:500;font-family:var(--font);cursor:pointer;text-align:center}
+.btn-primary{background:var(--plate);color:#fff}
+.btn-secondary{background:var(--bg3);border:0.5px solid var(--border);color:var(--text);margin-top:8px}
+.empty{text-align:center;padding:48px 24px;color:var(--muted)}
 .empty-icon{font-size:36px;margin-bottom:12px}
-.empty-text{font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px}
-.empty-sub{font-size:13px}
-
-/* ── DIVIDER ──────────────────────────────────────────────────────────────── */
-.divider{height:0.5px;background:var(--border);margin:16px 0}
-
-/* ── SLIDER ROW ───────────────────────────────────────────────────────────── */
-.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.slider-lbl{font-size:11px;color:var(--muted);min-width:110px;text-transform:uppercase;letter-spacing:0.04em}
-.slider-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
-.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
-.slider-val{font-size:12px;font-weight:500;min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+.empty-label{font-size:15px;font-weight:500;color:var(--text);margin-bottom:6px}
+.divider{height:0.5px;background:var(--border);margin:8px 16px}
+ 
+/* ── AR HUD TOP ── */
+#ar-top{position:fixed;top:var(--safe-top);left:0;right:0;z-index:20;display:none;justify-content:space-between;align-items:center;padding:8px 12px;pointer-events:none}
+.ar-pill{background:rgba(8,10,14,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted);pointer-events:all}
+.ar-pill strong{color:var(--plate)}
+.ar-legend{background:rgba(8,10,14,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:0.5px solid var(--border);border-radius:20px;padding:5px 10px;display:flex;gap:8px;align-items:center}
+.leg{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+ 
+/* ── DIST CARDS ── */
+#ar-dist{position:fixed;z-index:20;left:12px;right:12px;display:none;gap:8px}
+.dist-card{flex:1;background:rgba(8,10,14,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:0.5px solid var(--border);border-radius:12px;padding:7px 8px;text-align:center}
+.dist-val{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
+.dist-unit{font-size:9px;color:var(--muted)}
+.dist-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-top:2px}
+ 
+/* ── SAFETY BADGE ── */
+#safety-badge{position:fixed;z-index:20;right:12px;background:rgba(8,10,14,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:0.5px solid var(--border);border-radius:12px;padding:6px 14px;display:none;text-align:center}
+#safety-label{font-size:13px;font-weight:700;letter-spacing:0.06em}
+#safety-sub{font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+ 
+/* ── CROSSHAIR ── */
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;pointer-events:none;display:none}
+.ch-outer{width:60px;height:60px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center}
+.ch-inner{width:8px;height:8px;border-radius:50%;background:#fff}
+#tap-hint{position:fixed;top:calc(50% + 40px);left:50%;transform:translateX(-50%);z-index:25;background:rgba(8,10,14,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:0.5px solid var(--border);border-radius:20px;padding:6px 16px;font-size:12px;color:var(--muted);display:none;white-space:nowrap}
+#tap-layer{position:fixed;inset:0;z-index:24;pointer-events:none}
+ 
+/* ── BOTTOM PANEL ── */
+#ar-bottom{position:fixed;z-index:20;bottom:0;left:0;right:0;display:none}
+.ar-panel{background:rgba(8,10,14,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:0.5px solid var(--border);padding:10px 12px calc(var(--safe-bot) + 8px)}
+ 
+.lens-row{display:flex;gap:6px;margin-bottom:10px;justify-content:center}
+.lens-btn{flex:1;max-width:60px;padding:9px 0;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--muted);font-size:13px;font-weight:500;text-align:center;cursor:pointer;font-family:var(--font)}
+.lens-btn span{display:block;font-size:9px;opacity:0.7;margin-top:1px}
+.lens-btn.active{background:var(--plate);border-color:var(--plate);color:#fff}
+ 
+.sliders{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.sl-row{display:flex;align-items:center;gap:8px}
+.sl-lbl{font-size:10px;color:var(--muted);min-width:92px;text-transform:uppercase;letter-spacing:0.04em}
+.sl-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+.sl-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+.sl-val{font-size:11px;font-weight:500;min-width:34px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+ 
+.action-row{display:flex;gap:6px;margin-bottom:8px}
+.ar-btn{flex:1;padding:9px 4px;border-radius:10px;border:0.5px solid var(--border);background:rgba(255,255,255,0.05);color:var(--muted);font-size:11px;font-weight:500;text-align:center;cursor:pointer;font-family:var(--font)}
+.ar-btn.on{border-color:rgba(0,229,160,0.4);color:var(--crop)}
+.ar-btn.setting{border-color:rgba(255,149,0,0.5);color:#FF9500}
+.ar-btn.set{border-color:rgba(48,209,88,0.4);color:var(--safe)}
+ 
+.ar-metrics{display:flex;border-top:0.5px solid var(--border);padding-top:8px;gap:0}
+.ar-metric{flex:1;text-align:center}
+.ar-metric-val{font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1;margin-bottom:2px}
+.ar-metric-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em}
+.ar-metric-sep{width:0.5px;background:var(--border);align-self:stretch}
+ 
+/* ── MODALS ── */
+.modal-wrap{position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.6)}
+.modal-sheet{background:#0F1318;border-radius:20px 20px 0 0;border:0.5px solid var(--border);padding:20px 16px calc(var(--safe-bot) + 20px);width:100%;max-width:500px}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+.modal-sl{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.modal-sl label{font-size:11px;color:var(--muted);min-width:110px;text-transform:uppercase;letter-spacing:0.04em}
+.modal-sl input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+.modal-sl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+.modal-sl .val{font-size:13px;font-weight:500;min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.mbtn{padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer}
+.mbtn-primary{background:var(--plate);color:#fff;flex:1}
+.mbtn-ghost{background:var(--bg3);border:0.5px solid var(--border);color:var(--muted);padding:13px 20px}
+ 
+/* ── WARN ── */
+#ar-warn{display:none;background:rgba(255,92,53,0.12);border:0.5px solid rgba(255,92,53,0.4);border-radius:8px;padding:5px 10px;font-size:10px;color:#FF8A6E;margin-bottom:8px;text-align:center}
+ 
+/* ── FLASH ── */
+#flash{position:fixed;inset:0;z-index:200;background:#fff;opacity:0;pointer-events:none;transition:opacity 0.08s}
 </style>
 </head>
 <body>
-
-<!-- ── CAMERA + AR ──────────────────────────────────────────────────────── -->
-<video id="video" autoplay playsinline muted></video>
-<canvas id="ar-canvas"></canvas>
+ 
+<!-- THREE CANVAS (sits behind everything) -->
+<canvas id="three-canvas"></canvas>
 <div id="tap-layer"></div>
-
-<!-- ── AR HUD ──────────────────────────────────────────────────────────── -->
-<div id="ar-top" style="display:none">
-  <div class="ar-pill" id="ar-safety-pill" style="font-weight:700;color:#30D158">SAFE</div>
-  <div class="ar-pill">ANR · <strong id="ar-lens-label">50mm</strong></div>
+ 
+<!-- AR HUD -->
+<div id="ar-top">
+  <div class="ar-pill">ANR · <strong id="ar-lens-lbl">50mm</strong></div>
   <div class="ar-legend">
-    <div class="leg"><div class="leg-line" style="background:#22FF55"></div>wall</div>
-    <div class="leg"><div class="leg-line" style="background:#FFE135"></div>frustum</div>
+    <div class="leg"><div class="leg-dot" style="background:#3A9EE8"></div>plate</div>
+    <div class="leg"><div class="leg-dot" style="background:#00E5A0"></div>crop</div>
+    <div class="leg"><div class="leg-dot" style="background:#FF5C35"></div>wall</div>
+    <div class="leg"><div class="leg-dot" style="background:#A78BFA"></div>talent</div>
   </div>
 </div>
-
-<div id="ar-dist" style="display:none;top:0">
-  <div class="dist-card dist-tap" id="card-ct" title="Tap to adjust">
-    <div class="dist-val"><span id="d-ct">—</span><span class="dist-unit">ft</span></div>
-    <div class="dist-lbl">Cam→Talent</div>
-  </div>
-  <div class="dist-card dist-tap" id="card-tw" title="Tap to adjust">
-    <div class="dist-val"><span id="d-tw">—</span><span class="dist-unit">ft</span></div>
-    <div class="dist-lbl">Talent→Wall</div>
-  </div>
-  <div class="dist-card">
-    <div class="dist-val"><span id="d-cw">—</span><span class="dist-unit">ft</span></div>
-    <div class="dist-lbl">Cam→Wall</div>
-  </div>
+ 
+<div id="ar-dist" style="gap:8px">
+  <div class="dist-card"><div class="dist-val"><span id="d-ct">—</span><span class="dist-unit">ft</span></div><div class="dist-lbl">Cam→Talent</div></div>
+  <div class="dist-card"><div class="dist-val"><span id="d-tw">—</span><span class="dist-unit">ft</span></div><div class="dist-lbl">Talent→Wall</div></div>
+  <div class="dist-card"><div class="dist-val"><span id="d-cw">—</span><span class="dist-unit">ft</span></div><div class="dist-lbl">Cam→Wall</div></div>
 </div>
-
-<div id="crosshair"><div class="ch-ring"><div class="ch-dot"></div></div></div>
+ 
+<div id="safety-badge">
+  <div id="safety-label">SAFE</div>
+  <div id="safety-sub">Coverage</div>
+</div>
+ 
+<div id="crosshair"><div class="ch-outer"><div class="ch-inner"></div></div></div>
 <div id="tap-hint"></div>
-
-<!-- ── BOTTOM AR PANEL ──────────────────────────────────────────────────── -->
-<div id="ar-bottom" style="display:none">
+ 
+<!-- BOTTOM AR PANEL -->
+<div id="ar-bottom">
   <div class="ar-panel">
     <div id="ar-warn"></div>
     <div class="lens-row">
@@ -204,61 +175,73 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
       <div class="lens-btn" data-fl="85">85<span>mm</span></div>
       <div class="lens-btn" data-fl="135">135<span>mm</span></div>
     </div>
+    <div class="sliders">
+      <div class="sl-row">
+        <div class="sl-lbl">Cam height</div>
+        <input type="range" id="sl-cam-h" min="0.5" max="3.0" value="1.55" step="0.05">
+        <div class="sl-val"><span id="sv-cam-h">5.1</span>ft</div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-lbl">Talent→Wall</div>
+        <input type="range" id="sl-char-wall" min="3" max="6" value="4" step="0.5">
+        <div class="sl-val"><span id="sv-char-wall">13</span>ft</div>
+      </div>
+      <div class="sl-row">
+        <div class="sl-lbl">Cam→Talent</div>
+        <input type="range" id="sl-cam-char" min="2" max="15" value="6" step="0.5">
+        <div class="sl-val"><span id="sv-cam-char">20</span>ft</div>
+      </div>
+    </div>
     <div class="action-row">
       <div class="ar-btn" id="btn-set-wall">⊙ Set Wall</div>
-      <div class="ar-btn" id="btn-lidar-wall" style="display:none">◎ LiDAR</div>
-      <div class="ar-btn" id="btn-manual-dist">Distances</div>
+      <div class="ar-btn" id="btn-manual">Manual dist</div>
       <div class="ar-btn" id="btn-save-setup">Save Setup</div>
       <div class="ar-btn" id="btn-capture">⬤ Capture</div>
     </div>
     <div class="action-row" style="margin-bottom:0">
-      <div class="ar-btn" id="btn-toggle-overlay">Overlay ON</div>
+      <div class="ar-btn on" id="btn-overlay">Overlay ON</div>
       <div class="ar-btn" id="btn-menu">☰ Menu</div>
     </div>
-    <div class="ar-metrics" style="margin-top:10px">
+    <div class="ar-metrics" style="margin-top:8px">
       <div class="ar-metric"><div class="ar-metric-val" id="m-hfov">—</div><div class="ar-metric-lbl">HFoV</div></div>
       <div class="ar-metric-sep"></div>
       <div class="ar-metric"><div class="ar-metric-val" id="m-crop">—</div><div class="ar-metric-lbl">Plate used</div></div>
       <div class="ar-metric-sep"></div>
-      <div class="ar-metric"><div class="ar-metric-val" id="m-wall-cov">—</div><div class="ar-metric-lbl">Wall used</div></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-wallcov">—</div><div class="ar-metric-lbl">Wall used</div></div>
       <div class="ar-metric-sep"></div>
-      <div class="ar-metric"><div class="ar-metric-val" id="m-safety" style="font-size:12px">—</div><div class="ar-metric-lbl">Safety</div></div>
+      <div class="ar-metric"><div class="ar-metric-val" id="m-camh">—</div><div class="ar-metric-lbl">Cam height</div></div>
     </div>
   </div>
 </div>
-
-<!-- ── MANUAL MODAL ─────────────────────────────────────────────────────── -->
-<div id="manual-modal">
+ 
+<!-- MANUAL MODAL -->
+<div class="modal-wrap" id="manual-modal">
   <div class="modal-sheet">
     <div class="modal-title">Manual distances</div>
-    <div class="modal-sub">Drag sliders — frustum on wall updates live with lens and distances.</div>
-    <div class="modal-row">
-      <div class="modal-lbl">Cam → Talent</div>
-      <input type="range" id="mm-cam-char" min="3" max="60" value="20" step="1">
-      <div class="modal-val"><span id="mmv-cam-char">20</span>ft</div>
+    <div class="modal-sub">Enter measured distances. Wall and mannequin lock to ground.</div>
+    <div class="modal-sl">
+      <label>Cam → Talent</label>
+      <input type="range" id="mm-ct" min="5" max="50" value="20" step="1">
+      <div class="val"><span id="mmv-ct">20</span>ft</div>
     </div>
-    <div class="modal-row">
-      <div class="modal-lbl">Talent → Wall</div>
-      <input type="range" id="mm-char-wall" min="1" max="50" value="13" step="1">
-      <div class="modal-val"><span id="mmv-char-wall">13</span>ft</div>
-    </div>
-    <div class="modal-row" style="margin-bottom:0">
-      <div class="modal-lbl">Cam → Wall</div>
-      <div class="modal-val" id="mmv-cam-wall" style="flex:1;text-align:left">33ft</div>
+    <div class="modal-sl">
+      <label>Talent → Wall</label>
+      <input type="range" id="mm-tw" min="12" max="15" value="13" step="1">
+      <div class="val"><span id="mmv-tw">13</span>ft</div>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary btn-sm" id="btn-modal-cancel">Cancel</button>
-      <button class="btn btn-primary" id="btn-modal-ok">Apply</button>
+      <button class="mbtn mbtn-ghost" id="mm-cancel">Cancel</button>
+      <button class="mbtn mbtn-primary" id="mm-ok">Apply & Lock</button>
     </div>
   </div>
 </div>
-
-<!-- ── SAVE SETUP MODAL ──────────────────────────────────────────────────── -->
-<div id="setup-modal">
-  <div class="setup-sheet">
+ 
+<!-- SAVE SETUP MODAL -->
+<div class="modal-wrap" id="setup-modal">
+  <div class="modal-sheet">
     <div class="modal-title">Save Setup</div>
-    <div class="modal-sub">Saves current distances, lens, and overlay state to the active session.</div>
-    <div class="form-group">
+    <div class="modal-sub">Records current lens, distances, and camera height.</div>
+    <div class="form-group" style="margin:0 0 12px">
       <label class="form-label">Setup type</label>
       <select class="form-select" id="setup-type">
         <option value="MASTER">Master</option>
@@ -267,112 +250,90 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         <option value="TIGHT">Tight / Insert</option>
         <option value="WIDE">Wide Safety</option>
         <option value="OTS">Over the Shoulder</option>
-        <option value="CUSTOM">Custom</option>
+        <option value="LOW_ANGLE">Low Angle</option>
+        <option value="HIGH_ANGLE">High Angle</option>
       </select>
     </div>
-    <div class="form-group" id="setup-variant-group">
-      <label class="form-label">Variant (optional)</label>
-      <input class="form-input" id="setup-variant" placeholder="e.g. A, B, REFRAME">
-    </div>
-    <div class="form-group">
+    <div class="form-group" style="margin:0 0 12px">
       <label class="form-label">Notes</label>
       <input class="form-input" id="setup-notes" placeholder="e.g. Dutch angle, low mode">
     </div>
     <div class="modal-actions">
-      <button class="btn btn-secondary btn-sm" id="btn-setup-cancel">Cancel</button>
-      <button class="btn btn-primary" id="btn-setup-save">Save Setup</button>
+      <button class="mbtn mbtn-ghost" id="setup-cancel">Cancel</button>
+      <button class="mbtn mbtn-primary" id="setup-save">Save</button>
     </div>
   </div>
 </div>
-
-<!-- ── FLASH ─────────────────────────────────────────────────────────────── -->
+ 
+<!-- FLASH -->
 <div id="flash"></div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
+ 
+<!-- ════════════════════════════════════════════════
      SCREEN: WELCOME
-════════════════════════════════════════════════════════════════════════════ -->
+════════════════════════════════════════════════ -->
 <div class="screen active" id="screen-welcome">
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center">
-    <div style="font-size:48px;margin-bottom:20px">🎬</div>
+    <div style="font-size:52px;margin-bottom:20px">🎬</div>
     <h1 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:8px">VP Plate Planner</h1>
-    <p style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:40px;max-width:280px">AR-assisted on-location plate shoot planning for virtual production teams.</p>
+    <p style="font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:40px;max-width:280px">AR techvis for on-location ICVFX plate shoots. ANR Stage · Chennai.</p>
     <button class="btn btn-primary" id="btn-enter" style="max-width:260px">Open Projects</button>
-    <p style="font-size:11px;color:var(--dim);margin-top:16px">ANR VP Stage · Chennai · v1.0</p>
+    <button class="btn btn-secondary" id="btn-quick-ar" style="max-width:260px;margin-top:10px">Quick AR (no session)</button>
   </div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
+ 
+<!-- ════════════════════════════════════════════════
      SCREEN: PROJECTS
-════════════════════════════════════════════════════════════════════════════ -->
+════════════════════════════════════════════════ -->
 <div class="screen" id="screen-projects">
   <div class="nav-bar">
+    <button class="nav-btn" id="btn-proj-back">‹ Home</button>
     <div class="nav-title">Projects</div>
-    <button class="nav-btn right" id="btn-new-project">+ New</button>
+    <button class="nav-btn" id="btn-new-proj">+ New</button>
   </div>
-  <div style="padding:0 16px;flex:1">
-    <div id="project-list"></div>
-  </div>
+  <div id="proj-list" style="flex:1"></div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
+ 
+<!-- ════════════════════════════════════════════════
      SCREEN: NEW PROJECT
-════════════════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-new-project">
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-new-proj">
   <div class="nav-bar">
-    <button class="nav-btn" id="btn-back-from-new-project">Cancel</button>
+    <button class="nav-btn" id="btn-np-cancel">Cancel</button>
     <div class="nav-title">New Project</div>
-    <button class="nav-btn right" id="btn-create-project">Create</button>
+    <button class="nav-btn" id="btn-np-create">Create</button>
   </div>
-  <div style="padding:0 16px">
-    <div class="form-group">
-      <label class="form-label">Project name</label>
-      <input class="form-input" id="inp-project-name" placeholder="e.g. D55_HIGHWAY_SEQUENCE" autocapitalize="characters">
-    </div>
-    <p style="font-size:12px;color:var(--dim);margin-top:-8px">Spaces will be replaced with underscores. Stored locally on device.</p>
+  <div style="padding-top:12px">
+    <div class="form-group"><label class="form-label">Project name</label><input class="form-input" id="inp-proj-name" placeholder="e.g. D55_HIGHWAY_SEQUENCE" autocapitalize="characters"></div>
   </div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
+ 
+<!-- ════════════════════════════════════════════════
      SCREEN: SESSIONS
-════════════════════════════════════════════════════════════════════════════ -->
+════════════════════════════════════════════════ -->
 <div class="screen" id="screen-sessions">
   <div class="nav-bar">
-    <button class="nav-btn" id="btn-back-to-projects">Projects</button>
-    <div class="nav-title" id="sessions-title">Sessions</div>
-    <button class="nav-btn right" id="btn-new-session">+ New</button>
+    <button class="nav-btn" id="btn-sess-back">‹ Projects</button>
+    <div class="nav-title" id="sess-title">Sessions</div>
+    <button class="nav-btn" id="btn-new-sess">+ New</button>
   </div>
-  <div style="padding:0 16px;flex:1">
-    <div id="session-list"></div>
-  </div>
+  <div id="sess-list" style="flex:1"></div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
+ 
+<!-- ════════════════════════════════════════════════
      SCREEN: NEW SESSION
-════════════════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-new-session">
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-new-sess">
   <div class="nav-bar">
-    <button class="nav-btn" id="btn-back-from-new-session">Cancel</button>
+    <button class="nav-btn" id="btn-ns-cancel">Cancel</button>
     <div class="nav-title">New Session</div>
-    <button class="nav-btn right" id="btn-create-session">Create</button>
+    <button class="nav-btn" id="btn-ns-create">Create</button>
   </div>
-  <div style="padding:0 16px">
-    <div class="form-group">
-      <label class="form-label">Location / Scene ID</label>
-      <input class="form-input" id="inp-session-location" placeholder="e.g. ECR_ROADSIDE_EXT" autocapitalize="characters">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Description (optional)</label>
-      <input class="form-input" id="inp-session-desc" placeholder="e.g. Day exterior, main road">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Stage profile</label>
-      <select class="form-select" id="inp-session-stage">
-        <option value="ANR_CHENNAI">ANR VP Stage — Chennai (52ft / 21ft)</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Plate camera</label>
-      <select class="form-select" id="inp-session-cam">
+  <div style="padding-top:12px">
+    <div class="form-group"><label class="form-label">Location / Scene ID</label><input class="form-input" id="inp-sess-loc" placeholder="e.g. ECR_ROADSIDE_EXT" autocapitalize="characters"></div>
+    <div class="form-group"><label class="form-label">Description (optional)</label><input class="form-input" id="inp-sess-desc" placeholder="e.g. Day exterior, main road"></div>
+    <div class="form-group"><label class="form-label">Stage profile</label><select class="form-select" id="inp-sess-stage"><option value="ANR_CHENNAI">ANR VP Stage — Chennai (52ft / 21ft)</option></select></div>
+    <div class="form-group"><label class="form-label">Plate camera</label>
+      <select class="form-select" id="inp-sess-cam">
         <option value="IPHONE_17_PRO_MAX">iPhone 17 Pro Max</option>
         <option value="SONY_A7R4">Sony A7R IV</option>
         <option value="SONY_A7S3">Sony A7S III</option>
@@ -381,586 +342,822 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
     </div>
   </div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
-     SCREEN: SETUPS (session detail)
-════════════════════════════════════════════════════════════════════════════ -->
+ 
+<!-- ════════════════════════════════════════════════
+     SCREEN: SETUPS
+════════════════════════════════════════════════ -->
 <div class="screen" id="screen-setups">
   <div class="nav-bar">
-    <button class="nav-btn" id="btn-back-to-sessions">Sessions</button>
-    <div class="nav-title" id="setups-title">Setups</div>
-    <button class="nav-btn right" id="btn-open-ar">▶ AR</button>
+    <button class="nav-btn" id="btn-su-back">‹ Sessions</button>
+    <div class="nav-title" id="su-title">Setups</div>
+    <button class="nav-btn" id="btn-su-ar" style="font-weight:600">▶ AR</button>
   </div>
-  <div style="padding:0 16px;flex:1">
-    <div id="session-info-card" class="card" style="margin-bottom:16px"></div>
-    <div class="section-title">Setups</div>
-    <div id="setup-list"></div>
-    <div style="margin-top:16px">
-      <button class="btn btn-secondary" id="btn-open-ar-2">Open AR Viewer</button>
-    </div>
-  </div>
+  <div id="sess-info" class="card" style="margin-top:8px"></div>
+  <div class="section-title">Saved Setups</div>
+  <div id="setup-list" style="flex:1"></div>
 </div>
-
-<!-- ════════════════════════════════════════════════════════════════════════
-     SCREEN: AR (active shooting)
-════════════════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-ar">
-  <!-- AR screen is mostly transparent — camera shows through -->
-  <!-- Controls are in the fixed ar-top, ar-dist, ar-bottom divs -->
-  <div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none"></div>
-</div>
-
-<script type="module">
-import { STAGE_PROFILES, PLATE_CAMERAS, STAGE_CAMERAS,
-         hfovRad, vfovRad, cropRatio, wallCoverage,
-         safetyRating, mToFt, ftToM, LENS_PRESETS } from './src/profiles.js';
-import { createProject, getProjects, deleteProject,
-         createSession, getSessions, deleteSession,
-         createSetup, getSetups, deleteSetup,
-         getActiveState, setActiveState, saveScreenshot } from './src/session.js';
-import { AREngine } from './src/ar.js';
-import { isXrWallPickAvailable } from './src/xr-wall.js';
-import { renderTechvisSheet, downloadCanvas } from './src/export.js';
-
-// ── STATE ─────────────────────────────────────────────────────────────────
-let activeProjectId = null;
-let activeSessionId = null;
-let arEngine        = null;
-let cameraStarted   = false;
-let settingWall     = false;
-let overlayOn       = true;
-let currentFL       = 50;
-let motionEnabled   = false;
-let orientHandler   = null;
-
-const stageProfile  = STAGE_PROFILES.ANR_CHENNAI;
-const stageCamera   = STAGE_CAMERAS.URSA_12K_LF;
-
-// ── SCREEN ROUTER ─────────────────────────────────────────────────────────
-function show(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
-
-  const arActive = id === 'ar';
-  document.getElementById('ar-top').style.display    = arActive ? 'flex' : 'none';
-  document.getElementById('ar-dist').style.display   = arActive ? 'flex' : 'none';
-  document.getElementById('ar-bottom').style.display = arActive ? 'block' : 'none';
-
-  if (arActive) {
-    positionDistCards();
-    if (!cameraStarted) startCamera();
-    if (!arEngine) initAR();
-    syncDistSlidersFromEngine();
-    isXrWallPickAvailable().then(ok => {
-      const btn = document.getElementById('btn-lidar-wall');
-      if (btn) btn.style.display = ok ? 'block' : 'none';
-    });
-  }
+ 
+<!-- ════════════════════════════════════════════════
+     SCREEN: AR (transparent)
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-ar"></div>
+ 
+<script>
+// ════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════════════
+const WALL_CHORD_M = 14.63, WALL_H_M = 6.40, WALL_R_M = 10.5, WALL_ARC_DEG = 86.5;
+const URSA_W = 36.35, URSA_H = 25.45;
+const MANNEQUIN_H = 1.83; // 6ft in metres
+ 
+const PLATE_CAMS = {
+  IPHONE_17_PRO_MAX: { name:'iPhone 17 Pro Max', hfov: 73.7 * Math.PI/180 },
+  SONY_A7R4:         { name:'Sony A7R IV',        hfov: 73.7 * Math.PI/180 },
+  SONY_A7S3:         { name:'Sony A7S III',        hfov: 73.7 * Math.PI/180 },
+  RED_KOMODO_6K:     { name:'RED Komodo 6K',       hfov: 60.2 * Math.PI/180 },
+};
+ 
+function hfov(fl)   { return 2*Math.atan(URSA_W/(2*fl)); }
+function vfov(fl)   { return 2*Math.atan(URSA_H/(2*fl)); }
+function ftToM(f)   { return f*0.3048; }
+function mToFt(m)   { return +(m/0.3048).toFixed(1); }
+function cropR(pl,fl){ return Math.min(hfov(fl)/pl,1); }
+function wallCov(fl,d){ return Math.min(2*d*Math.tan(hfov(fl)/2)/WALL_CHORD_M,1.5); }
+function safety(cr,wc){
+  if(wc>1.0)  return {label:'INVALID',color:'#FF3B30'};
+  if(cr>0.95) return {label:'RISKY',  color:'#FF9500'};
+  if(cr>0.82) return {label:'TIGHT',  color:'#FFD60A'};
+  return              {label:'SAFE',   color:'#30D158'};
 }
-
-function positionDistCards() {
-  const topBar = document.getElementById('ar-top');
-  const distDiv = document.getElementById('ar-dist');
-  const topH = topBar.offsetHeight || 52;
-  const safeTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0;
-  distDiv.style.top = (safeTop + topH + 6) + 'px';
+ 
+// ════════════════════════════════════════════════════════════════
+// SESSION STORAGE
+// ════════════════════════════════════════════════════════════════
+const SK = 'vp_data';
+function dbLoad(){ try{ return JSON.parse(localStorage.getItem(SK))||{projects:[]}; }catch{ return{projects:[]}; }}
+function dbSave(d){ try{ localStorage.setItem(SK,JSON.stringify(d)); }catch{} }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6).toUpperCase(); }
+ 
+function createProject(name){ const d=dbLoad(); const p={id:uid(),name:name.toUpperCase().replace(/\s+/g,'_'),createdAt:Date.now(),sessions:[]}; d.projects.unshift(p); dbSave(d); return p; }
+function getProjects(){ return dbLoad().projects; }
+function createSession(pid,data){ const d=dbLoad(); const proj=d.projects.find(p=>p.id===pid); if(!proj) return null; const s={id:uid(),...data,createdAt:Date.now(),setups:[]}; proj.sessions.unshift(s); dbSave(d); return s; }
+function getSessions(pid){ const d=dbLoad(); return d.projects.find(p=>p.id===pid)?.sessions||[]; }
+function createSetup(pid,sid,data){ const d=dbLoad(); const sess=d.projects.find(p=>p.id===pid)?.sessions.find(s=>s.id===sid); if(!sess) return; const n=String(sess.setups.length+1).padStart(3,'0'); const su={id:uid(),setupId:`SETUP_${n}_${data.type}`,createdAt:Date.now(),...data}; sess.setups.push(su); dbSave(d); return su; }
+function getSetups(pid,sid){ const d=dbLoad(); return d.projects.find(p=>p.id===pid)?.sessions.find(s=>s.id===sid)?.setups||[]; }
+ 
+// ════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════
+let activeProjId=null, activeSessId=null;
+let currentFL=50, overlayOn=true, settingWall=false;
+let wallLocked=false, wallDist_m=null;
+let camToChar_m=ftToM(20), charToWall_m=ftToM(13), camHeight_m=1.55;
+let gyroAlpha=0, gyroBeta=0, gyroGamma=0;
+let anchorAlpha=0, anchorBeta=0, anchorGamma=0;
+let plateHFOV = PLATE_CAMS.IPHONE_17_PRO_MAX.hfov;
+let cameraStarted=false;
+let threeReady=false;
+ 
+// ════════════════════════════════════════════════════════════════
+// SCREEN ROUTER
+// ════════════════════════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  const ar = id==='ar';
+  document.getElementById('ar-top').style.display    = ar?'flex':'none';
+  document.getElementById('ar-dist').style.display   = ar?'flex':'none';
+  document.getElementById('safety-badge').style.display = ar?'block':'none';
+  document.getElementById('ar-bottom').style.display = ar?'block':'none';
+  if(ar){ positionDistCards(); if(!cameraStarted) startCamera(); }
 }
-
-// ── WELCOME ───────────────────────────────────────────────────────────────
-document.getElementById('btn-enter').addEventListener('click', () => {
-  show('projects');
-  renderProjects();
-});
-
-// ── PROJECTS ──────────────────────────────────────────────────────────────
-function renderProjects() {
-  const list = document.getElementById('project-list');
-  const projects = getProjects();
-  if (!projects.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">No projects yet</div><div class="empty-sub">Tap + New to create your first project</div></div>`;
-    return;
-  }
-  list.innerHTML = projects.map(p => `
-    <div class="card" data-id="${p.id}" style="cursor:pointer">
-      <div class="card-row">
-        <div>
-          <div class="card-label">${p.name}</div>
-          <div class="card-sub">${getSessions(p.id).length} session(s) · ${formatDate(p.createdAt)}</div>
-        </div>
-        <span class="card-chevron">›</span>
-      </div>
-    </div>
-  `).join('');
-  list.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('click', () => {
-      activeProjectId = card.dataset.id;
-      const p = getProjects().find(x => x.id === activeProjectId);
-      document.getElementById('sessions-title').textContent = p?.name || 'Sessions';
-      show('sessions');
-      renderSessions();
-    });
+ 
+function positionDistCards(){
+  const top = document.getElementById('ar-top');
+  const dist= document.getElementById('ar-dist');
+  const sb  = document.getElementById('safety-badge');
+  requestAnimationFrame(()=>{
+    const h = top.offsetHeight||52;
+    const st= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top'))||0;
+    dist.style.top = (st+h+6)+'px';
+    sb.style.top   = (st+h+6)+'px';
   });
 }
-
-document.getElementById('btn-new-project').addEventListener('click', () => show('new-project'));
-document.getElementById('btn-back-from-new-project').addEventListener('click', () => show('projects'));
-document.getElementById('btn-create-project').addEventListener('click', () => {
-  const name = document.getElementById('inp-project-name').value.trim();
-  if (!name) return;
-  createProject(name);
-  document.getElementById('inp-project-name').value = '';
-  show('projects');
-  renderProjects();
-});
-
-// ── SESSIONS ──────────────────────────────────────────────────────────────
-function renderSessions() {
-  const list = document.getElementById('session-list');
-  const sessions = getSessions(activeProjectId);
-  if (!sessions.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎥</div><div class="empty-text">No sessions yet</div><div class="empty-sub">Tap + New to add a plate session</div></div>`;
-    return;
-  }
-  list.innerHTML = sessions.map(s => `
-    <div class="card" data-id="${s.id}" style="cursor:pointer">
-      <div class="card-row">
-        <div>
-          <div class="card-label">${s.location}</div>
-          <div class="card-sub">${s.description || ''} · ${getSetups(activeProjectId, s.id).length} setup(s)</div>
-          <div class="card-meta">${s.stageProfileId} · ${s.plateCameraId}</div>
-        </div>
-        <span class="card-chevron">›</span>
-      </div>
-    </div>
-  `).join('');
-  list.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('click', () => {
-      activeSessionId = card.dataset.id;
-      renderSetupScreen();
-      show('setups');
-    });
-  });
+ 
+// ════════════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ════════════════════════════════════════════════════════════════
+const threeScript = document.createElement('script');
+threeScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+threeScript.onload = initThree;
+document.head.appendChild(threeScript);
+ 
+let renderer, scene, camera3d, videoTexture, videoMesh;
+let wallGroup, frustumGroup, mannequinGroup;
+let videoEl;
+ 
+function initThree(){
+  const canvas = document.getElementById('three-canvas');
+  renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setClearColor(0x000000,0);
+  resize3d();
+ 
+  scene = new THREE.Scene();
+ 
+  // Perspective camera matching phone FOV
+  camera3d = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.01, 500);
+  camera3d.position.set(0,0,0);
+ 
+  // Ambient light
+  scene.add(new THREE.AmbientLight(0xffffff,0.6));
+  const dir = new THREE.DirectionalLight(0xffffff,0.8);
+  dir.position.set(5,10,5); scene.add(dir);
+ 
+  buildScene();
+  threeReady=true;
+  animate();
+  window.addEventListener('resize', resize3d);
 }
-
-document.getElementById('btn-back-to-projects').addEventListener('click', () => { show('projects'); renderProjects(); });
-document.getElementById('btn-new-session').addEventListener('click', () => show('new-session'));
-document.getElementById('btn-back-from-new-session').addEventListener('click', () => show('sessions'));
-document.getElementById('btn-create-session').addEventListener('click', () => {
-  const location = document.getElementById('inp-session-location').value.trim();
-  if (!location) return;
-  createSession(activeProjectId, {
-    location,
-    description: document.getElementById('inp-session-desc').value.trim(),
-    stageProfileId: document.getElementById('inp-session-stage').value,
-    plateCameraId: document.getElementById('inp-session-cam').value,
-  });
-  document.getElementById('inp-session-location').value = '';
-  document.getElementById('inp-session-desc').value = '';
-  show('sessions');
-  renderSessions();
-});
-
-// ── SETUPS ────────────────────────────────────────────────────────────────
-function renderSetupScreen() {
-  const sessions  = getSessions(activeProjectId);
-  const session   = sessions.find(s => s.id === activeSessionId);
-  if (!session) return;
-  const plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
-
-  document.getElementById('setups-title').textContent = session.location;
-  document.getElementById('session-info-card').innerHTML = `
-    <div class="card-row"><div>
-      <div class="card-label">${session.location}</div>
-      <div class="card-sub">${session.description || 'No description'}</div>
-    </div></div>
-    <div class="divider"></div>
-    <div style="display:flex;gap:24px;font-size:12px;color:var(--muted)">
-      <div><span style="color:var(--dim)">Stage</span><br><span style="color:var(--text)">${stageProfile.shortName}</span></div>
-      <div><span style="color:var(--dim)">Plate cam</span><br><span style="color:var(--text)">${plateCamera.shortName}</span></div>
-      <div><span style="color:var(--dim)">Wall</span><br><span style="color:var(--text)">${stageProfile.wall.arcFt}ft arc</span></div>
-    </div>
-  `;
-
-  const setups = getSetups(activeProjectId, activeSessionId);
-  const setupList = document.getElementById('setup-list');
-  if (!setups.length) {
-    setupList.innerHTML = `<div class="empty-state"><div class="empty-icon">📐</div><div class="empty-text">No setups saved</div><div class="empty-sub">Open AR viewer and tap Save Setup to record a framing</div></div>`;
-    return;
-  }
-  setupList.innerHTML = setups.map(s => `
-    <div class="card">
-      <div class="card-row">
-        <div>
-          <div class="card-label" style="font-family:var(--mono);font-size:13px">${s.setupId}</div>
-          <div class="card-sub">${s.params.fl ? s.params.fl + 'mm' : ''} · Cam→Wall ${s.params.camToWall_ft ? s.params.camToWall_ft + 'ft' : '—'} · ${s.params.safety || '—'}</div>
-          ${s.params.notes ? `<div class="card-meta">${s.params.notes}</div>` : ''}
-        </div>
-        <div class="card-badge">${formatDate(s.createdAt)}</div>
-      </div>
-    </div>
-  `).join('');
+ 
+function resize3d(){
+  if(!renderer) return;
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  if(camera3d){ camera3d.aspect=window.innerWidth/window.innerHeight; camera3d.updateProjectionMatrix(); }
 }
-
-document.getElementById('btn-back-to-sessions').addEventListener('click', () => { show('sessions'); renderSessions(); });
-document.getElementById('btn-open-ar').addEventListener('click', openAR);
-document.getElementById('btn-open-ar-2').addEventListener('click', openAR);
-
-async function openAR() {
-  const sessions = getSessions(activeProjectId);
-  const session  = sessions.find(s => s.id === activeSessionId);
-  if (arEngine && session) {
-    arEngine.plateCamera = PLATE_CAMERAS[session.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
-    arEngine.resize();
-    arEngine.refreshScene();
-  }
-  show('ar');
-  // iOS Safari: motion permission must be requested from a user tap
-  await enableMotionSensors(false);
+ 
+function buildScene(){
+  // Ground grid
+  const grid = new THREE.GridHelper(40,40,0x333333,0x222222);
+  grid.position.y = 0; scene.add(grid);
+ 
+  // Groups
+  wallGroup     = new THREE.Group(); scene.add(wallGroup);
+  frustumGroup  = new THREE.Group(); scene.add(frustumGroup);
+  mannequinGroup= new THREE.Group(); scene.add(mannequinGroup);
+ 
+  buildWall();
+  buildMannequin();
+  updateFrustums();
 }
-
-// ── AR ENGINE ─────────────────────────────────────────────────────────────
-async function startCamera() {
-  cameraStarted = true;
-  const video = document.getElementById('video');
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false,
-    });
-    video.srcObject = stream;
-    await video.play();
-  } catch(e) { alert('Camera access required. Open in Safari and allow camera access.'); }
-}
-
-function initAR() {
-  try {
-    const canvas = document.getElementById('ar-canvas');
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    arEngine = new AREngine(canvas);
-    arEngine.stageProfile = stageProfile;
-    arEngine.stageCamera  = stageCamera;
-
-    const sessions = getSessions(activeProjectId);
-    const session  = sessions?.find(s => s.id === activeSessionId);
-    arEngine.plateCamera = PLATE_CAMERAS[session?.plateCameraId] || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
-
-    arEngine.currentFL    = currentFL;
-    arEngine.camToChar_m  = ftToM(20);
-    arEngine.charToWall_m = ftToM(13);
-    arEngine.refreshScene();
-    arEngine.start();
-
-    window.addEventListener('resize', () => arEngine?.resize());
-
-    orientHandler = onOrient;
-    enableMotionSensors(false);
-
-    setInterval(updateARMetrics, 200);
-  } catch (err) {
-    console.error('AR init failed:', err);
-    alert('AR viewer failed to start. Check network (Three.js CDN) and try a hard refresh.');
-    show('setups');
+ 
+// ── LED WALL ──────────────────────────────────────────────────────────────
+function buildWall(){
+  wallGroup.clear();
+ 
+  const R=WALL_R_M, arcRad=(WALL_ARC_DEG/2)*Math.PI/180, segs=40;
+ 
+  // Arc curve points
+  const pts=[];
+  for(let i=0;i<=segs;i++){
+    const t = (i/segs)*2-1;
+    const theta = t*arcRad;
+    pts.push(new THREE.Vector3(R*Math.sin(theta), 0, R-R*Math.cos(theta)));
   }
-}
-
-async function enableMotionSensors(showAlert) {
-  if (motionEnabled) return true;
-  if (typeof DeviceOrientationEvent === 'undefined') {
-    if (showAlert) alert('Motion sensors are not available in this browser.');
-    return false;
-  }
-
-  const needsPerm = typeof DeviceOrientationEvent.requestPermission === 'function';
-  try {
-    if (needsPerm) {
-      const p = await DeviceOrientationEvent.requestPermission();
-      if (p !== 'granted') {
-        if (showAlert) {
-          alert('Motion access is required to anchor the overlay to the wall. Enable it in Settings → Safari → Motion & Orientation Access.');
-        }
-        return false;
-      }
+  const curve = new THREE.CatmullRomCurve3(pts);
+ 
+  // Extruded wall shape
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0); shape.lineTo(0,WALL_H_M);
+  const extSettings = {
+    steps:segs, bevelEnabled:false,
+    extrudePath: curve,
+  };
+ 
+  // Wall main face - orange tinted translucent
+  const wallGeo = new THREE.TubeGeometry(curve, segs, 0.02, 1, false);
+ 
+  // Use a flat wall panel approach instead - arc of panels
+  for(let i=0;i<=segs;i++){
+    const t=(i/segs)*2-1;
+    const theta=t*arcRad;
+    const x=R*Math.sin(theta), z=R-R*Math.cos(theta);
+    // Small panel
+    if(i<segs){
+      const t2=((i+1)/segs)*2-1;
+      const theta2=t2*arcRad;
+      const x2=R*Math.sin(theta2), z2=R-R*Math.cos(theta2);
+      const panelGeo = new THREE.BufferGeometry();
+      const verts = new Float32Array([
+        x,0,z,  x2,0,z2,  x2,WALL_H_M,z2,
+        x,0,z,  x2,WALL_H_M,z2,  x,WALL_H_M,z,
+      ]);
+      panelGeo.setAttribute('position',new THREE.BufferAttribute(verts,3));
+      panelGeo.computeVertexNormals();
+      const mat = new THREE.MeshPhongMaterial({
+        color:0xFF5C35, transparent:true, opacity:0.18,
+        side:THREE.DoubleSide, emissive:0xFF3A10, emissiveIntensity:0.3,
+      });
+      wallGroup.add(new THREE.Mesh(panelGeo,mat));
     }
-    if (orientHandler) {
-      window.removeEventListener('deviceorientation', orientHandler, true);
-      window.addEventListener('deviceorientation', orientHandler, true);
-    }
-    motionEnabled = true;
-    return true;
-  } catch {
-    if (showAlert) alert('Could not enable motion sensors. Try again from a tap (Safari requires a direct tap).');
-    return false;
   }
+ 
+  // Wall wireframe edges (top + bottom arcs + sides)
+  const edgeMat = new THREE.LineBasicMaterial({color:0xFF5C35, linewidth:2});
+ 
+  // Bottom arc
+  const botPts = pts.map(p=>new THREE.Vector3(p.x,0,p.z));
+  wallGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(botPts),edgeMat));
+  // Top arc
+  const topPts = pts.map(p=>new THREE.Vector3(p.x,WALL_H_M,p.z));
+  wallGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(topPts),edgeMat));
+  // Left side
+  wallGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([botPts[0],topPts[0]]),edgeMat));
+  // Right side
+  wallGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([botPts[segs],topPts[segs]]),edgeMat));
+ 
+  // Wall label sprite
+  const canvas2d=document.createElement('canvas'); canvas2d.width=512; canvas2d.height=64;
+  const c=canvas2d.getContext('2d');
+  c.fillStyle='rgba(0,0,0,0)'; c.fillRect(0,0,512,64);
+  c.fillStyle='#FF5C35'; c.font='bold 28px Arial'; c.textAlign='center';
+  c.fillText('LED WALL · 52ft arc · 48ft chord',256,42);
+  const tex=new THREE.CanvasTexture(canvas2d);
+  const spriteMat=new THREE.SpriteMaterial({map:tex,transparent:true});
+  const sprite=new THREE.Sprite(spriteMat);
+  sprite.scale.set(4,0.5,1);
+  sprite.position.set(0,WALL_H_M+0.4,R-WALL_R_M*Math.cos(0));
+  wallGroup.add(sprite);
 }
-
-function onOrient(e) {
-  if (!arEngine || e.alpha == null) return;
-  arEngine.onOrientation(e.alpha, e.beta || 0, e.gamma || 0);
+ 
+// ── MANNEQUIN ─────────────────────────────────────────────────────────────
+function buildMannequin(){
+  mannequinGroup.clear();
+ 
+  const purple = 0xA78BFA;
+  const mat = new THREE.MeshPhongMaterial({color:purple,emissive:0x5B4FBF,emissiveIntensity:0.4,transparent:true,opacity:0.85});
+  const wireMat = new THREE.MeshBasicMaterial({color:purple,wireframe:true,transparent:true,opacity:0.3});
+ 
+  // Head (sphere)
+  const headR=0.12;
+  const head=new THREE.Mesh(new THREE.SphereGeometry(headR,12,12),mat);
+  head.position.set(0,MANNEQUIN_H-headR,0);
+  mannequinGroup.add(head);
+ 
+  // Body (cylinder)
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.16,0.7,10),mat);
+  body.position.set(0,MANNEQUIN_H-headR*2-0.35,0);
+  mannequinGroup.add(body);
+ 
+  // Hips
+  const hip=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.14,0.25,10),mat);
+  hip.position.set(0,MANNEQUIN_H-headR*2-0.7-0.125,0);
+  mannequinGroup.add(hip);
+ 
+  // Left leg
+  const legL=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.06,0.82,8),mat);
+  legL.position.set(-0.1,0.41,0); mannequinGroup.add(legL);
+ 
+  // Right leg
+  const legR=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.06,0.82,8),mat);
+  legR.position.set(0.1,0.41,0); mannequinGroup.add(legR);
+ 
+  // Left arm
+  const armL=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.04,0.6,8),mat);
+  armL.rotation.z=Math.PI/7;
+  armL.position.set(-0.22,MANNEQUIN_H-headR*2-0.42,0); mannequinGroup.add(armL);
+ 
+  // Right arm
+  const armR=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.04,0.6,8),mat);
+  armR.rotation.z=-Math.PI/7;
+  armR.position.set(0.22,MANNEQUIN_H-headR*2-0.42,0); mannequinGroup.add(armR);
+ 
+  // Height indicator line
+  const linePts=[new THREE.Vector3(0.4,0,0),new THREE.Vector3(0.4,MANNEQUIN_H,0)];
+  const lineMat=new THREE.LineBasicMaterial({color:purple});
+  mannequinGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(linePts),lineMat));
+ 
+  // 6ft label
+  const lc=document.createElement('canvas'); lc.width=128; lc.height=32;
+  const lx=lc.getContext('2d');
+  lx.fillStyle='#A78BFA'; lx.font='bold 20px Arial'; lx.textAlign='left';
+  lx.fillText('6ft / 1.83m',4,24);
+  const ltex=new THREE.CanvasTexture(lc);
+  const lsm=new THREE.SpriteMaterial({map:ltex,transparent:true});
+  const ls=new THREE.Sprite(lsm); ls.scale.set(1.2,0.3,1);
+  ls.position.set(0.8,MANNEQUIN_H*0.5,0); mannequinGroup.add(ls);
+ 
+  // Ground ring
+  const ringGeo=new THREE.RingGeometry(0.3,0.32,32);
+  const ringMat=new THREE.MeshBasicMaterial({color:purple,side:THREE.DoubleSide,transparent:true,opacity:0.5});
+  const ring=new THREE.Mesh(ringGeo,ringMat);
+  ring.rotation.x=-Math.PI/2; ring.position.y=0.01;
+  mannequinGroup.add(ring);
 }
-
-function updateARMetrics() {
-  if (!arEngine) return;
-  const fl       = arEngine.currentFL;
-  const camToW_m = arEngine.wallDist_m || (arEngine.camToChar_m + arEngine.charToWall_m);
-  const camToC_m = arEngine.camToChar_m;
-  const charW_m  = arEngine.charToWall_m;
-
-  const plateHFOV = arEngine.plateCamera?.fovEquiv_deg * Math.PI / 180 || 1.29;
-  const stageHFOV = hfovRad(stageCamera.sensorW_mm, fl);
-  const cr        = cropRatio(plateHFOV, stageHFOV);
-  const wc        = wallCoverage(stageHFOV, camToW_m, stageProfile.wall.chordM);
-  const safety    = safetyRating(cr, wc);
-
-  document.getElementById('d-ct').textContent  = Math.round(mToFt(camToC_m));
-  document.getElementById('d-tw').textContent  = Math.round(mToFt(charW_m));
-  document.getElementById('d-cw').textContent  = Math.round(mToFt(camToW_m));
-  document.getElementById('m-hfov').textContent = (stageHFOV * 180 / Math.PI).toFixed(1) + '°';
-  document.getElementById('m-crop').textContent = Math.round(cr * 100) + '%';
-  document.getElementById('m-wall-cov').textContent = Math.round(wc * 100) + '%';
-  const safeEl = document.getElementById('m-safety');
-  safeEl.textContent  = safety.label;
-  safeEl.style.color  = safety.color;
-  const pill = document.getElementById('ar-safety-pill');
-  if (pill) {
-    pill.textContent = safety.label;
-    pill.style.color = safety.color;
+ 
+// ── FRUSTUMS ──────────────────────────────────────────────────────────────
+function updateFrustums(){
+  if(!frustumGroup) return;
+  frustumGroup.clear();
+ 
+  const camDist = camToChar_m + charToWall_m; // cam to wall
+  const Z = camDist; // wall Z in world space (cam at 0)
+  const Zc = camToChar_m;
+ 
+  // Plate frustum (24mm equiv)
+  drawFrustum(plateHFOV, plateHFOV*0.75, Z, 0x3A9EE8, 0.12, false);
+  // Stage crop frustum
+  drawFrustum(hfov(currentFL), vfov(currentFL), Z, 0x00E5A0, 0.15, true);
+}
+ 
+function drawFrustum(hfovR, vfovR, dist, color, opacity, dashed){
+  const hw = dist*Math.tan(hfovR/2);
+  const hh = dist*Math.tan(vfovR/2);
+  const ch = camHeight_m;
+ 
+  // Four corner points at wall distance
+  const TL = new THREE.Vector3(-hw, hh-ch,  dist);
+  const TR = new THREE.Vector3( hw, hh-ch,  dist);
+  const BL = new THREE.Vector3(-hw,-hh-ch,  dist);
+  const BR = new THREE.Vector3( hw,-hh-ch,  dist);
+  const CAM= new THREE.Vector3(0,   -ch,    0   ); // cam origin
+ 
+  const mat = new THREE.LineBasicMaterial({color, transparent:true, opacity:opacity+0.5});
+ 
+  // Face at wall
+  const face=[TL,TR,BR,BL,TL];
+  frustumGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(face),mat));
+ 
+  // Rays from cam to corners
+  for(const pt of [TL,TR,BL,BR]){
+    const ray=[CAM,pt];
+    frustumGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ray),
+      new THREE.LineBasicMaterial({color,transparent:true,opacity:0.25})));
   }
-
-  const warnEl = document.getElementById('ar-warn');
-  const warns  = [];
-  if (wc > 1.0) warns.push('On-set lens exceeds wall width — spill risk');
-  if (cr > 0.93) warns.push('Crop near plate boundary — reframe margin tight');
-  warnEl.style.display = warns.length ? 'block' : 'none';
-  if (warns.length) warnEl.textContent = '⚠ ' + warns.join(' · ');
+ 
+  // Filled face
+  const geo=new THREE.BufferGeometry();
+  const verts=new Float32Array([
+    TL.x,TL.y,TL.z, TR.x,TR.y,TR.z, BR.x,BR.y,BR.z,
+    TL.x,TL.y,TL.z, BR.x,BR.y,BR.z, BL.x,BL.y,BL.z,
+  ]);
+  geo.setAttribute('position',new THREE.BufferAttribute(verts,3));
+  const fillMat=new THREE.MeshBasicMaterial({color,transparent:true,opacity:opacity*0.5,side:THREE.DoubleSide,depthWrite:false});
+  frustumGroup.add(new THREE.Mesh(geo,fillMat));
 }
-
-// ── LENS BUTTONS ──────────────────────────────────────────────────────────
-document.querySelectorAll('.lens-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentFL = parseInt(btn.dataset.fl);
-    document.getElementById('ar-lens-label').textContent = currentFL + 'mm';
-    if (arEngine) {
-      arEngine.currentFL = currentFL;
-      arEngine.refreshScene();
-    }
-  });
-});
-
-// ── SET WALL ──────────────────────────────────────────────────────────────
-const tapLayer = document.getElementById('tap-layer');
-const arBottom = document.getElementById('ar-bottom');
-const btnSetWall = document.getElementById('btn-set-wall');
-
-function exitWallSettingMode() {
-  settingWall = false;
-  document.getElementById('crosshair').style.display = 'none';
-  document.getElementById('tap-hint').style.display  = 'none';
-  tapLayer.classList.remove('active');
-  arBottom.classList.remove('wall-setting');
+ 
+// ── SCENE POSITIONING ─────────────────────────────────────────────────────
+function updateScene(){
+  if(!threeReady) return;
+ 
+  const camDist = camToChar_m + charToWall_m;
+ 
+  // Wall sits at Z = camDist from camera (camera at origin)
+  // Wall centre is at (0, 0, camDist), bottom at Y=0 (ground)
+  // Camera height offset applied via camera3d position Y
+  wallGroup.position.set(0, 0, camDist - WALL_R_M*(1-Math.cos((WALL_ARC_DEG/2)*Math.PI/180)));
+  wallGroup.position.z = camDist;
+ 
+  // Mannequin at talent position, standing on ground
+  mannequinGroup.position.set(0, 0, camToChar_m);
+ 
+  // Camera at origin, elevated by camHeight_m
+  camera3d.position.set(0, camHeight_m, 0);
+  camera3d.lookAt(0, camHeight_m*0.5, camToChar_m);
+ 
+  updateFrustums();
+  updateHUD();
 }
-
-function enterWallSettingMode() {
-  settingWall = true;
-  document.getElementById('crosshair').style.display = 'block';
-  const hint = document.getElementById('tap-hint');
-  hint.style.display = 'block';
-  hint.textContent   = 'Aim crosshair at wall centre · Tap screen to lock';
-  tapLayer.classList.add('active');
-  arBottom.classList.add('wall-setting');
-  btnSetWall.textContent = '✕ Cancel';
-  btnSetWall.classList.add('warn-btn');
+ 
+// ── GYRO ──────────────────────────────────────────────────────────────────
+function applyGyro(){
+  if(!threeReady||!wallLocked) return;
+  let da = gyroAlpha - anchorAlpha;
+  if(da> Math.PI) da-=2*Math.PI;
+  if(da<-Math.PI) da+=2*Math.PI;
+  const db = gyroBeta - anchorBeta;
+ 
+  // Rotate scene around camera to simulate looking around
+  scene.rotation.y = -da;
+  scene.rotation.x = db * 0.5;
 }
-
-btnSetWall.addEventListener('click', async () => {
-  if (!arEngine) return;
-  if (settingWall) {
-    exitWallSettingMode();
-    btnSetWall.textContent = '⊙ Set Wall';
-    btnSetWall.classList.remove('warn-btn');
-    return;
-  }
-  await enableMotionSensors(true);
-  enterWallSettingMode();
-});
-
-function lockWallFromTap() {
-  if (!settingWall || !arEngine) return;
-  exitWallSettingMode();
-
-  arEngine.lockWallAnchor(arEngine.camToChar_m + arEngine.charToWall_m);
-  syncDistSlidersFromEngine();
-
-  btnSetWall.textContent = '✓ Wall set';
-  btnSetWall.classList.remove('warn-btn');
-  btnSetWall.classList.add('on');
-  document.getElementById('manual-modal').style.display = 'flex';
-}
-
-tapLayer.addEventListener('pointerup', (e) => {
-  if (!settingWall) return;
-  e.preventDefault();
-  lockWallFromTap();
-});
-
-// ── DISTANCES (live sliders) ──────────────────────────────────────────────
-function applyDistancesFromSliders() {
-  const cc = parseInt(document.getElementById('mm-cam-char').value, 10);
-  const cw = parseInt(document.getElementById('mm-char-wall').value, 10);
-  document.getElementById('mmv-cam-char').textContent = cc;
-  document.getElementById('mmv-char-wall').textContent = cw;
-  document.getElementById('mmv-cam-wall').textContent = `${cc + cw}ft`;
-  if (!arEngine) return;
-  arEngine.setDistances(ftToM(cc), ftToM(cw));
-  updateARMetrics();
-}
-
-function syncDistSlidersFromEngine() {
-  if (!arEngine) return;
-  const cc = Math.round(mToFt(arEngine.camToChar_m));
-  const cw = Math.round(mToFt(arEngine.charToWall_m));
-  document.getElementById('mm-cam-char').value = cc;
-  document.getElementById('mm-char-wall').value = cw;
-  document.getElementById('mmv-cam-char').textContent = cc;
-  document.getElementById('mmv-char-wall').textContent = cw;
-  document.getElementById('mmv-cam-wall').textContent = `${cc + cw}ft`;
-}
-
-function openDistModal() {
-  syncDistSlidersFromEngine();
-  document.getElementById('manual-modal').style.display = 'flex';
-}
-
-document.getElementById('mm-cam-char').addEventListener('input', applyDistancesFromSliders);
-document.getElementById('mm-char-wall').addEventListener('input', applyDistancesFromSliders);
-document.getElementById('btn-modal-cancel').addEventListener('click', () => {
-  document.getElementById('manual-modal').style.display = 'none';
-});
-document.getElementById('btn-manual-dist').addEventListener('click', openDistModal);
-document.getElementById('card-ct').addEventListener('click', openDistModal);
-document.getElementById('card-tw').addEventListener('click', openDistModal);
-document.getElementById('btn-modal-ok').addEventListener('click', () => {
-  applyDistancesFromSliders();
-  document.getElementById('manual-modal').style.display = 'none';
-});
-
-// ── SAVE SETUP ────────────────────────────────────────────────────────────
-document.getElementById('btn-save-setup').addEventListener('click', () => {
-  if (!activeProjectId || !activeSessionId) {
-    alert('Open a session first from the menu before saving a setup.');
-    return;
-  }
-  document.getElementById('setup-modal').style.display = 'flex';
-});
-document.getElementById('btn-setup-cancel').addEventListener('click', () => {
-  document.getElementById('setup-modal').style.display = 'none';
-});
-document.getElementById('btn-setup-save').addEventListener('click', () => {
-  if (!arEngine) return;
-  const fl      = arEngine.currentFL;
-  const camToW  = Math.round(mToFt(arEngine.wallDist_m || arEngine.camToChar_m + arEngine.charToWall_m));
-  const camToC  = Math.round(mToFt(arEngine.camToChar_m));
-  const charW   = Math.round(mToFt(arEngine.charToWall_m));
-
-  const plateHFOV = arEngine.plateCamera?.fovEquiv_deg * Math.PI / 180 || 1.29;
-  const stageHFOV = hfovRad(stageCamera.sensorW_mm, fl);
-  const cr        = cropRatio(plateHFOV, stageHFOV);
-  const wc        = wallCoverage(stageHFOV, arEngine.wallDist_m || ftToM(camToW), stageProfile.wall.chordM);
-  const safety    = safetyRating(cr, wc);
-
-  createSetup(activeProjectId, activeSessionId, {
-    type:    document.getElementById('setup-type').value,
-    variant: document.getElementById('setup-variant').value.trim(),
-    params: {
-      fl, camToWall_ft: camToW, camToChar_ft: camToC, charToWall_ft: charW,
-      safety: safety.label,
-      plateCrop: Math.round(cr * 100),
-      wallCov: Math.round(wc * 100),
-      notes: document.getElementById('setup-notes').value.trim(),
-    },
-  });
-  document.getElementById('setup-variant').value = '';
-  document.getElementById('setup-notes').value   = '';
-  document.getElementById('setup-modal').style.display = 'none';
-  alert('Setup saved.');
-});
-
-// ── CAPTURE ───────────────────────────────────────────────────────────────
-document.getElementById('btn-lidar-wall').addEventListener('click', async () => {
-  if (!arEngine) return;
-  const { pickWallWithXr } = await import('./src/xr-wall.js');
-  alert('Point your phone at the wall. Tap the screen when the reticle is on the wall centre.');
-  const q = await pickWallWithXr();
-  if (q) {
-    arEngine.lockWallAnchor(arEngine.camToChar_m + arEngine.charToWall_m, q);
-    btnSetWall.textContent = '✓ Wall set';
-    btnSetWall.classList.add('on');
-    openDistModal();
-  }
-});
-
-document.getElementById('btn-capture').addEventListener('click', async () => {
-  if (arEngine) arEngine.forceRender();
-
-  const flash = document.getElementById('flash');
-  flash.style.opacity = '1';
-  setTimeout(() => { flash.style.opacity = '0'; }, 100);
-
-  await new Promise(r => setTimeout(r, 120));
-
-  const sessions = getSessions(activeProjectId);
-  const session  = sessions?.find(s => s.id === activeSessionId);
-  const project  = { name: session ? 'PROJECT' : 'UNTITLED' };
-  const setup    = null;
-  const plateCamera = arEngine?.plateCamera || PLATE_CAMERAS.IPHONE_17_PRO_MAX;
-
-  const techvis = renderTechvisSheet({
-    videoEl:      document.getElementById('video'),
-    arCanvas:     document.getElementById('ar-canvas'),
-    project:      { name: activeProjectId ? getProjects().find(p=>p.id===activeProjectId)?.name : 'UNTITLED' },
-    session:      session || { location: 'NO_SESSION' },
-    setup,
-    stageProfile,
-    plateCamera,
-    stageCamera,
-    currentFL,
-    camToChar_m:  arEngine?.camToChar_m  || ftToM(20),
-    charToWall_m: arEngine?.charToWall_m || ftToM(13),
-  });
-
-  const ts = new Date();
-  const name = `VP_${currentFL}mm_${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}_${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}.jpg`;
-  downloadCanvas(techvis, name);
-});
-
-// ── OVERLAY TOGGLE ────────────────────────────────────────────────────────
-document.getElementById('btn-toggle-overlay').addEventListener('click', function() {
-  overlayOn = !overlayOn;
-  if (arEngine) arEngine.visible = overlayOn;
-  this.textContent = overlayOn ? 'Overlay ON' : 'Overlay OFF';
-  this.classList.toggle('on', overlayOn);
-});
-
-// ── MENU (back to sessions) ───────────────────────────────────────────────
-document.getElementById('btn-menu').addEventListener('click', () => {
-  if (activeProjectId && activeSessionId) {
-    renderSetupScreen();
-    show('setups');
-  } else if (activeProjectId) {
-    show('sessions');
-    renderSessions();
+ 
+// ── ANIMATE ───────────────────────────────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+  if(!threeReady) return;
+  applyGyro();
+  if(overlayOn && document.getElementById('screen-ar').classList.contains('active')){
+    renderer.render(scene, camera3d);
   } else {
-    show('projects');
-    renderProjects();
+    renderer.clear();
   }
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// CAMERA FEED (video as background)
+// ════════════════════════════════════════════════════════════════
+async function startCamera(){
+  cameraStarted=true;
+  // Create video element
+  videoEl = document.createElement('video');
+  videoEl.autoplay=true; videoEl.playsInline=true; videoEl.muted=true;
+  videoEl.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0';
+  document.body.insertBefore(videoEl, document.body.firstChild);
+ 
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false
+    });
+    videoEl.srcObject=stream;
+    await videoEl.play();
+  }catch(e){
+    alert('Camera access required. Open in Safari and allow camera access when prompted.');
+  }
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// HUD UPDATES
+// ════════════════════════════════════════════════════════════════
+function updateHUD(){
+  const camToW = camToChar_m + charToWall_m;
+  const cr = cropR(plateHFOV, currentFL);
+  const wc = wallCov(currentFL, camToW);
+  const s  = safety(cr, wc);
+ 
+  document.getElementById('d-ct').textContent  = Math.round(mToFt(camToChar_m));
+  document.getElementById('d-tw').textContent  = Math.round(mToFt(charToWall_m));
+  document.getElementById('d-cw').textContent  = Math.round(mToFt(camToW));
+  document.getElementById('m-hfov').textContent= (hfov(currentFL)*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('m-crop').textContent= Math.round(cr*100)+'%';
+  document.getElementById('m-wallcov').textContent=Math.round(wc*100)+'%';
+  document.getElementById('m-camh').textContent= mToFt(camHeight_m)+'ft';
+  document.getElementById('sv-cam-h').textContent= mToFt(camHeight_m);
+  document.getElementById('sv-char-wall').textContent= Math.round(mToFt(charToWall_m));
+  document.getElementById('sv-cam-char').textContent=  Math.round(mToFt(camToChar_m));
+ 
+  const sl=document.getElementById('safety-label');
+  sl.textContent=s.label; sl.style.color=s.color;
+ 
+  const warns=[];
+  if(wc>1.0) warns.push('On-set lens exceeds wall — spill risk');
+  if(cr>0.93) warns.push('Crop near plate boundary');
+  const we=document.getElementById('ar-warn');
+  we.style.display=warns.length?'block':'none';
+  if(warns.length) we.textContent='⚠ '+warns.join(' · ');
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// SLIDERS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('sl-cam-h').addEventListener('input',function(){
+  camHeight_m=parseFloat(this.value);
+  document.getElementById('sv-cam-h').textContent=mToFt(camHeight_m);
+  if(threeReady){ camera3d.position.y=camHeight_m; updateFrustums(); updateHUD(); }
 });
-
-// ── UTILS ─────────────────────────────────────────────────────────────────
-function formatDate(ts) {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+document.getElementById('sl-char-wall').addEventListener('input',function(){
+  charToWall_m=parseFloat(this.value);
+  document.getElementById('sv-char-wall').textContent=Math.round(mToFt(charToWall_m));
+  updateScene();
+});
+document.getElementById('sl-cam-char').addEventListener('input',function(){
+  camToChar_m=parseFloat(this.value);
+  document.getElementById('sv-cam-char').textContent=Math.round(mToFt(camToChar_m));
+  updateScene();
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// LENS BUTTONS
+// ════════════════════════════════════════════════════════════════
+document.querySelectorAll('.lens-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.lens-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFL=parseInt(btn.dataset.fl);
+    document.getElementById('ar-lens-lbl').textContent=currentFL+'mm';
+    updateScene();
+  });
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// SET WALL
+// ════════════════════════════════════════════════════════════════
+const tapLayer=document.getElementById('tap-layer');
+document.getElementById('btn-set-wall').addEventListener('click',()=>{
+  settingWall=true;
+  document.getElementById('crosshair').style.display='block';
+  const hint=document.getElementById('tap-hint');
+  hint.style.display='block'; hint.textContent='Point at wall centre · Tap to lock';
+  tapLayer.style.pointerEvents='all';
+  document.getElementById('btn-set-wall').textContent='⊙ Setting…';
+  document.getElementById('btn-set-wall').className='ar-btn setting';
+});
+ 
+tapLayer.addEventListener('click',()=>{
+  if(!settingWall) return;
+  settingWall=false;
+  document.getElementById('crosshair').style.display='none';
+  document.getElementById('tap-hint').style.display='none';
+  tapLayer.style.pointerEvents='none';
+  anchorAlpha=gyroAlpha; anchorBeta=gyroBeta; anchorGamma=gyroGamma;
+  wallLocked=true;
+  document.getElementById('btn-set-wall').textContent='✓ Wall locked';
+  document.getElementById('btn-set-wall').className='ar-btn set';
+  // Open manual modal for distances
+  document.getElementById('manual-modal').style.display='flex';
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// MANUAL DISTANCE MODAL
+// ════════════════════════════════════════════════════════════════
+document.getElementById('mm-ct').addEventListener('input',function(){
+  document.getElementById('mmv-ct').textContent=this.value;
+});
+document.getElementById('mm-tw').addEventListener('input',function(){
+  document.getElementById('mmv-tw').textContent=this.value;
+});
+document.getElementById('mm-cancel').addEventListener('click',()=>{
+  document.getElementById('manual-modal').style.display='none';
+});
+document.getElementById('btn-manual').addEventListener('click',()=>{
+  document.getElementById('manual-modal').style.display='flex';
+});
+document.getElementById('mm-ok').addEventListener('click',()=>{
+  const ct=parseInt(document.getElementById('mm-ct').value);
+  const tw=parseInt(document.getElementById('mm-tw').value);
+  camToChar_m=ftToM(ct); charToWall_m=ftToM(tw);
+  wallDist_m=camToChar_m+charToWall_m;
+  wallLocked=true;
+  anchorAlpha=gyroAlpha; anchorBeta=gyroBeta; anchorGamma=gyroGamma;
+  document.getElementById('sl-cam-char').value=camToChar_m;
+  document.getElementById('sl-char-wall').value=charToWall_m;
+  document.getElementById('manual-modal').style.display='none';
+  updateScene();
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// SAVE SETUP
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-save-setup').addEventListener('click',()=>{
+  if(!activeProjId||!activeSessId){ alert('Open a session from the menu first.'); return; }
+  document.getElementById('setup-modal').style.display='flex';
+});
+document.getElementById('setup-cancel').addEventListener('click',()=>{
+  document.getElementById('setup-modal').style.display='none';
+});
+document.getElementById('setup-save').addEventListener('click',()=>{
+  const camToW=camToChar_m+charToWall_m;
+  const cr=cropR(plateHFOV,currentFL), wc=wallCov(currentFL,camToW), s=safety(cr,wc);
+  createSetup(activeProjId,activeSessId,{
+    type:document.getElementById('setup-type').value,
+    fl:currentFL,
+    camToWall_ft:Math.round(mToFt(camToW)),
+    camToChar_ft:Math.round(mToFt(camToChar_m)),
+    charToWall_ft:Math.round(mToFt(charToWall_m)),
+    camHeight_ft:+mToFt(camHeight_m),
+    safety:s.label, plateCrop:Math.round(cr*100), wallCov:Math.round(wc*100),
+    notes:document.getElementById('setup-notes').value.trim(),
+  });
+  document.getElementById('setup-notes').value='';
+  document.getElementById('setup-modal').style.display='none';
+  alert('Setup saved ✓');
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// CAPTURE
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-capture').addEventListener('click',async()=>{
+  const flash=document.getElementById('flash');
+  flash.style.opacity='1'; setTimeout(()=>{flash.style.opacity='0';},100);
+  await new Promise(r=>setTimeout(r,80));
+ 
+  // Composite: video + three canvas
+  const W=1080,H=1920;
+  const out=document.createElement('canvas'); out.width=W; out.height=H;
+  const ctx=out.getContext('2d');
+ 
+  // Video frame
+  if(videoEl&&videoEl.readyState>=2){
+    const vw=videoEl.videoWidth,vh=videoEl.videoHeight;
+    const sc=Math.max(W/vw,H/vh);
+    ctx.drawImage(videoEl,(W-vw*sc)/2,(H-vh*sc)/2,vw*sc,vh*sc);
+  } else {
+    ctx.fillStyle='#0D1117'; ctx.fillRect(0,0,W,H);
+  }
+ 
+  // Three canvas
+  const tc=document.getElementById('three-canvas');
+  ctx.drawImage(tc,0,0,W,H);
+ 
+  // Info panel
+  const panH=220;
+  ctx.fillStyle='rgba(8,10,14,0.9)'; ctx.fillRect(0,H-panH,W,panH);
+  ctx.fillStyle='#3A9EE8'; ctx.fillRect(0,H-panH,W,3);
+ 
+  const camToW=camToChar_m+charToWall_m;
+  const cr=cropR(plateHFOV,currentFL),wc=wallCov(currentFL,camToW),s=safety(cr,wc);
+ 
+  ctx.fillStyle=s.color; ctx.font='bold 14px Arial'; ctx.textAlign='right';
+  ctx.fillText(s.label,W-20,H-panH+28);
+ 
+  const lines=[
+    `ANR VP STAGE · ${currentFL}mm Supreme Prime on-set`,
+    `Cam→Wall: ${Math.round(mToFt(camToW))}ft · Cam→Talent: ${Math.round(mToFt(camToChar_m))}ft · Talent→Wall: ${Math.round(mToFt(charToWall_m))}ft`,
+    `Camera height: ${mToFt(camHeight_m)}ft · Plate used: ${Math.round(cr*100)}% · Wall used: ${Math.round(wc*100)}%`,
+    `${new Date().toISOString().slice(0,16).replace('T',' ')} · VP Plate Planner · ANR Stage Chennai`,
+  ];
+  ctx.textAlign='left';
+  lines.forEach((l,i)=>{
+    ctx.fillStyle=i===0?'#F0EDE8':'rgba(240,237,232,0.55)';
+    ctx.font=`${i===0?'600':'400'} ${i===0?14:12}px Arial`;
+    ctx.fillText(l,20,H-panH+30+i*38);
+  });
+ 
+  // Multi-lens strip
+  const lenses=[24,35,50,85,135];
+  const lw=(W-40)/lenses.length;
+  lenses.forEach((fl,i)=>{
+    const lx=20+i*lw;
+    const lcr=cropR(plateHFOV,fl),lwc=wallCov(fl,camToW),ls=safety(lcr,lwc);
+    const active=fl===currentFL;
+    ctx.fillStyle=active?'rgba(58,158,232,0.25)':'rgba(255,255,255,0.05)';
+    ctx.roundRect&&ctx.roundRect(lx,H-panH+155,lw-6,58,8);
+    ctx.fill();
+    ctx.fillStyle=ls.color; ctx.font='bold 9px Arial'; ctx.textAlign='center';
+    ctx.fillText(ls.label,lx+lw/2-3,H-panH+170);
+    ctx.fillStyle=active?'#3A9EE8':'#F0EDE8'; ctx.font='bold 16px Arial';
+    ctx.fillText(fl+'mm',lx+lw/2-3,H-panH+192);
+    ctx.fillStyle='rgba(240,237,232,0.45)'; ctx.font='10px Arial';
+    ctx.fillText(`${Math.round(lcr*100)}% plate`,lx+lw/2-3,H-panH+208);
+  });
+ 
+  // Download
+  out.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`VP_${currentFL}mm_${Date.now()}.jpg`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  },'image/jpeg',0.93);
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// OVERLAY TOGGLE
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-overlay').addEventListener('click',function(){
+  overlayOn=!overlayOn;
+  this.textContent=overlayOn?'Overlay ON':'Overlay OFF';
+  this.classList.toggle('on',overlayOn);
+  if(!overlayOn&&renderer) renderer.clear();
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// MENU
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-menu').addEventListener('click',()=>{
+  if(activeProjId&&activeSessId){ renderSetupScreen(); show('setups'); }
+  else if(activeProjId){ show('sessions'); renderSessions(); }
+  else show('welcome');
+});
+ 
+// ════════════════════════════════════════════════════════════════
+// DEVICE ORIENTATION
+// ════════════════════════════════════════════════════════════════
+function startGyro(){
+  const req=typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function';
+  if(req){
+    DeviceOrientationEvent.requestPermission().then(p=>{
+      if(p==='granted') window.addEventListener('deviceorientation',onOrient,true);
+    }).catch(()=>{});
+  } else {
+    window.addEventListener('deviceorientation',onOrient,true);
+  }
+}
+function onOrient(e){
+  gyroAlpha=(e.alpha||0)*Math.PI/180;
+  gyroBeta =(e.beta ||0)*Math.PI/180;
+  gyroGamma=(e.gamma||0)*Math.PI/180;
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// WELCOME BUTTONS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-enter').addEventListener('click',()=>{ show('projects'); renderProjects(); });
+document.getElementById('btn-quick-ar').addEventListener('click',()=>{ openAR(); });
+ 
+function openAR(){
+  show('ar'); startGyro();
+  setTimeout(updateScene,300); // wait for Three to be ready
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// PROJECTS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-proj-back').addEventListener('click',()=>show('welcome'));
+document.getElementById('btn-new-proj').addEventListener('click',()=>show('new-proj'));
+document.getElementById('btn-np-cancel').addEventListener('click',()=>show('projects'));
+document.getElementById('btn-np-create').addEventListener('click',()=>{
+  const n=document.getElementById('inp-proj-name').value.trim();
+  if(!n) return; createProject(n);
+  document.getElementById('inp-proj-name').value='';
+  show('projects'); renderProjects();
+});
+ 
+function renderProjects(){
+  const list=document.getElementById('proj-list');
+  const projects=getProjects();
+  if(!projects.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">📁</div><div class="empty-label">No projects yet</div><div>Tap + New to start</div></div>';
+    return;
+  }
+  list.innerHTML='<div style="height:8px"></div>'+projects.map(p=>`
+    <div class="card" data-id="${p.id}">
+      <div class="card-row"><div>
+        <div class="card-label">${p.name}</div>
+        <div class="card-sub">${getSessions(p.id).length} session(s)</div>
+      </div><span class="chevron">›</span></div>
+    </div>`).join('');
+  list.querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('click',()=>{
+      activeProjId=c.dataset.id;
+      const p=getProjects().find(x=>x.id===activeProjId);
+      document.getElementById('sess-title').textContent=p?.name||'Sessions';
+      show('sessions'); renderSessions();
+    });
+  });
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// SESSIONS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-sess-back').addEventListener('click',()=>{ show('projects'); renderProjects(); });
+document.getElementById('btn-new-sess').addEventListener('click',()=>show('new-sess'));
+document.getElementById('btn-ns-cancel').addEventListener('click',()=>show('sessions'));
+document.getElementById('btn-ns-create').addEventListener('click',()=>{
+  const loc=document.getElementById('inp-sess-loc').value.trim();
+  if(!loc) return;
+  const camId=document.getElementById('inp-sess-cam').value;
+  createSession(activeProjId,{
+    location:loc.toUpperCase().replace(/\s+/g,'_'),
+    description:document.getElementById('inp-sess-desc').value.trim(),
+    stageProfileId:document.getElementById('inp-sess-stage').value,
+    plateCameraId:camId,
+  });
+  plateHFOV=PLATE_CAMS[camId]?.hfov||PLATE_CAMS.IPHONE_17_PRO_MAX.hfov;
+  document.getElementById('inp-sess-loc').value='';
+  document.getElementById('inp-sess-desc').value='';
+  show('sessions'); renderSessions();
+});
+ 
+function renderSessions(){
+  const list=document.getElementById('sess-list');
+  const sessions=getSessions(activeProjId);
+  if(!sessions.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">🎥</div><div class="empty-label">No sessions yet</div><div>Tap + New to add a plate session</div></div>';
+    return;
+  }
+  list.innerHTML='<div style="height:8px"></div>'+sessions.map(s=>`
+    <div class="card" data-id="${s.id}">
+      <div class="card-row"><div>
+        <div class="card-label">${s.location}</div>
+        <div class="card-sub">${s.description||''}</div>
+        <div class="card-meta">${s.plateCameraId||''} · ${getSetups(activeProjId,s.id).length} setup(s)</div>
+      </div><span class="chevron">›</span></div>
+    </div>`).join('');
+  list.querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('click',()=>{
+      activeSessId=c.dataset.id;
+      const sess=getSessions(activeProjId).find(s=>s.id===activeSessId);
+      if(sess) plateHFOV=PLATE_CAMS[sess.plateCameraId]?.hfov||PLATE_CAMS.IPHONE_17_PRO_MAX.hfov;
+      renderSetupScreen(); show('setups');
+    });
+  });
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// SETUPS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-su-back').addEventListener('click',()=>{ show('sessions'); renderSessions(); });
+document.getElementById('btn-su-ar').addEventListener('click',openAR);
+ 
+function renderSetupScreen(){
+  const sessions=getSessions(activeProjId);
+  const sess=sessions.find(s=>s.id===activeSessId);
+  if(!sess) return;
+  document.getElementById('su-title').textContent=sess.location;
+  document.getElementById('sess-info').innerHTML=`
+    <div class="card-label">${sess.location}</div>
+    <div class="card-sub">${sess.description||'No description'}</div>
+    <div class="card-meta">${sess.plateCameraId} · ANR Stage</div>`;
+  const setups=getSetups(activeProjId,activeSessId);
+  const list=document.getElementById('setup-list');
+  if(!setups.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">📐</div><div class="empty-label">No setups saved</div><div>Open AR and tap Save Setup</div></div>';
+    return;
+  }
+  list.innerHTML='<div style="height:8px"></div>'+setups.map(s=>`
+    <div class="card">
+      <div class="card-label" style="font-family:var(--font);font-size:13px;letter-spacing:0.02em">${s.setupId}</div>
+      <div class="card-sub">${s.fl}mm · Cam→Wall ${s.camToWall_ft}ft · Cam height ${s.camHeight_ft}ft · <span style="color:${s.safety==='SAFE'?'#30D158':s.safety==='TIGHT'?'#FFD60A':s.safety==='RISKY'?'#FF9500':'#FF3B30'}">${s.safety}</span></div>
+      ${s.notes?`<div class="card-meta">${s.notes}</div>`:''}
+    </div>`).join('');
+}
+ 
+// ════════════════════════════════════════════════════════════════
+// SERVICE WORKER
+// ════════════════════════════════════════════════════════════════
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 </script>
 </body>

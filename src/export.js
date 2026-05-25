@@ -44,9 +44,9 @@ export function renderTechvisSheet({
   }
   ctx.restore();
 
-  // AR overlay on top of video
-  if (arCanvas) {
-    ctx.drawImage(arCanvas, 0, 0, W, videoH);
+  // AR overlay (WebGL) — match video crop and use full canvas buffer
+  if (arCanvas && arCanvas.width > 0) {
+    ctx.drawImage(arCanvas, 0, 0, arCanvas.width, arCanvas.height, 0, 0, W, videoH);
   }
 
   // Safety badge over video

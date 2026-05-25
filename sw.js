@@ -1,12 +1,14 @@
-const CACHE = 'vp-planner-v5';
+const CACHE = 'vp-planner-v6';
 const ASSETS = [
   '/vp-plate-planner/',
   '/vp-plate-planner/index.html',
   '/vp-plate-planner/manifest.json',
+  '/vp-plate-planner/vendor/three/build/three.module.js',
   '/vp-plate-planner/src/profiles.js',
   '/vp-plate-planner/src/session.js',
   '/vp-plate-planner/src/ar.js',
   '/vp-plate-planner/src/led-wall-shader.js',
+  '/vp-plate-planner/src/xr-wall.js',
   '/vp-plate-planner/src/export.js',
   '/vp-plate-planner/icons/icon-192.png',
   '/vp-plate-planner/icons/icon-512.png',

@@ -94,6 +94,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .dist-val{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
 .dist-unit{font-size:9px;color:var(--muted);margin-left:1px}
 .dist-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
+.dist-tap{cursor:pointer}
+.dist-tap:active{opacity:0.7}
 
 /* ── CROSSHAIR ────────────────────────────────────────────────────────────── */
 #crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:28;pointer-events:none;display:none}
@@ -168,19 +170,17 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   <div class="ar-pill" id="ar-safety-pill" style="font-weight:700;color:#30D158">SAFE</div>
   <div class="ar-pill">ANR · <strong id="ar-lens-label">50mm</strong></div>
   <div class="ar-legend">
-    <div class="leg"><div class="leg-line" style="background:#3A9EE8"></div>plate</div>
-    <div class="leg"><div class="leg-line" style="background:#00E5A0"></div>crop</div>
     <div class="leg"><div class="leg-line" style="background:#22FF55"></div>wall</div>
-    <div class="leg"><div class="leg-line" style="background:#A78BFA"></div>talent</div>
+    <div class="leg"><div class="leg-line" style="background:#FFE135"></div>frustum</div>
   </div>
 </div>
 
 <div id="ar-dist" style="display:none;top:0">
-  <div class="dist-card">
+  <div class="dist-card dist-tap" id="card-ct" title="Tap to adjust">
     <div class="dist-val"><span id="d-ct">—</span><span class="dist-unit">ft</span></div>
     <div class="dist-lbl">Cam→Talent</div>
   </div>
-  <div class="dist-card">
+  <div class="dist-card dist-tap" id="card-tw" title="Tap to adjust">
     <div class="dist-val"><span id="d-tw">—</span><span class="dist-unit">ft</span></div>
     <div class="dist-lbl">Talent→Wall</div>
   </div>
@@ -206,7 +206,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
     </div>
     <div class="action-row">
       <div class="ar-btn" id="btn-set-wall">⊙ Set Wall</div>
-      <div class="ar-btn" id="btn-manual-dist">Manual</div>
+      <div class="ar-btn" id="btn-lidar-wall" style="display:none">◎ LiDAR</div>
+      <div class="ar-btn" id="btn-manual-dist">Distances</div>
       <div class="ar-btn" id="btn-save-setup">Save Setup</div>
       <div class="ar-btn" id="btn-capture">⬤ Capture</div>
     </div>
@@ -230,16 +231,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 <div id="manual-modal">
   <div class="modal-sheet">
     <div class="modal-title">Manual distances</div>
-    <div class="modal-sub">Enter measured distances. Overlay will calculate geometry.</div>
+    <div class="modal-sub">Drag sliders — frustum on wall updates live with lens and distances.</div>
     <div class="modal-row">
       <div class="modal-lbl">Cam → Talent</div>
-      <input type="range" id="mm-cam-char" min="5" max="50" value="20" step="1">
+      <input type="range" id="mm-cam-char" min="3" max="60" value="20" step="1">
       <div class="modal-val"><span id="mmv-cam-char">20</span>ft</div>
     </div>
     <div class="modal-row">
       <div class="modal-lbl">Talent → Wall</div>
-      <input type="range" id="mm-char-wall" min="12" max="15" value="13" step="1">
+      <input type="range" id="mm-char-wall" min="1" max="50" value="13" step="1">
       <div class="modal-val"><span id="mmv-char-wall">13</span>ft</div>
+    </div>
+    <div class="modal-row" style="margin-bottom:0">
+      <div class="modal-lbl">Cam → Wall</div>
+      <div class="modal-val" id="mmv-cam-wall" style="flex:1;text-align:left">33ft</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" id="btn-modal-cancel">Cancel</button>
@@ -414,6 +419,7 @@ import { createProject, getProjects, deleteProject,
          createSetup, getSetups, deleteSetup,
          getActiveState, setActiveState, saveScreenshot } from './src/session.js';
 import { AREngine } from './src/ar.js';
+import { isXrWallPickAvailable } from './src/xr-wall.js';
 import { renderTechvisSheet, downloadCanvas } from './src/export.js';
 
 // ── STATE ─────────────────────────────────────────────────────────────────
@@ -444,6 +450,11 @@ function show(id) {
     positionDistCards();
     if (!cameraStarted) startCamera();
     if (!arEngine) initAR();
+    syncDistSlidersFromEngine();
+    isXrWallPickAvailable().then(ok => {
+      const btn = document.getElementById('btn-lidar-wall');
+      if (btn) btn.style.display = ok ? 'block' : 'none';
+    });
   }
 }
 
@@ -780,6 +791,7 @@ function lockWallFromTap() {
   exitWallSettingMode();
 
   arEngine.lockWallAnchor(arEngine.camToChar_m + arEngine.charToWall_m);
+  syncDistSlidersFromEngine();
 
   btnSetWall.textContent = '✓ Wall set';
   btnSetWall.classList.remove('warn-btn');
@@ -793,32 +805,44 @@ tapLayer.addEventListener('pointerup', (e) => {
   lockWallFromTap();
 });
 
-// ── MANUAL DISTANCE ───────────────────────────────────────────────────────
-document.getElementById('mm-cam-char').addEventListener('input', function() {
-  document.getElementById('mmv-cam-char').textContent = this.value;
-});
-document.getElementById('mm-char-wall').addEventListener('input', function() {
-  document.getElementById('mmv-char-wall').textContent = this.value;
-});
+// ── DISTANCES (live sliders) ──────────────────────────────────────────────
+function applyDistancesFromSliders() {
+  const cc = parseInt(document.getElementById('mm-cam-char').value, 10);
+  const cw = parseInt(document.getElementById('mm-char-wall').value, 10);
+  document.getElementById('mmv-cam-char').textContent = cc;
+  document.getElementById('mmv-char-wall').textContent = cw;
+  document.getElementById('mmv-cam-wall').textContent = `${cc + cw}ft`;
+  if (!arEngine) return;
+  arEngine.setDistances(ftToM(cc), ftToM(cw));
+  updateARMetrics();
+}
+
+function syncDistSlidersFromEngine() {
+  if (!arEngine) return;
+  const cc = Math.round(mToFt(arEngine.camToChar_m));
+  const cw = Math.round(mToFt(arEngine.charToWall_m));
+  document.getElementById('mm-cam-char').value = cc;
+  document.getElementById('mm-char-wall').value = cw;
+  document.getElementById('mmv-cam-char').textContent = cc;
+  document.getElementById('mmv-char-wall').textContent = cw;
+  document.getElementById('mmv-cam-wall').textContent = `${cc + cw}ft`;
+}
+
+function openDistModal() {
+  syncDistSlidersFromEngine();
+  document.getElementById('manual-modal').style.display = 'flex';
+}
+
+document.getElementById('mm-cam-char').addEventListener('input', applyDistancesFromSliders);
+document.getElementById('mm-char-wall').addEventListener('input', applyDistancesFromSliders);
 document.getElementById('btn-modal-cancel').addEventListener('click', () => {
   document.getElementById('manual-modal').style.display = 'none';
 });
-document.getElementById('btn-manual-dist').addEventListener('click', () => {
-  document.getElementById('manual-modal').style.display = 'flex';
-});
+document.getElementById('btn-manual-dist').addEventListener('click', openDistModal);
+document.getElementById('card-ct').addEventListener('click', openDistModal);
+document.getElementById('card-tw').addEventListener('click', openDistModal);
 document.getElementById('btn-modal-ok').addEventListener('click', () => {
-  const cc = parseInt(document.getElementById('mm-cam-char').value);
-  const cw = parseInt(document.getElementById('mm-char-wall').value);
-  if (arEngine) {
-    arEngine.camToChar_m  = ftToM(cc);
-    arEngine.charToWall_m = ftToM(cw);
-    arEngine.wallDist_m   = ftToM(cc + cw);
-    if (!arEngine.wallLocked) {
-      arEngine.lockWallAnchor(arEngine.wallDist_m);
-    } else {
-      arEngine.refreshScene();
-    }
-  }
+  applyDistancesFromSliders();
   document.getElementById('manual-modal').style.display = 'none';
 });
 
@@ -864,12 +888,27 @@ document.getElementById('btn-setup-save').addEventListener('click', () => {
 });
 
 // ── CAPTURE ───────────────────────────────────────────────────────────────
+document.getElementById('btn-lidar-wall').addEventListener('click', async () => {
+  if (!arEngine) return;
+  const { pickWallWithXr } = await import('./src/xr-wall.js');
+  alert('Point your phone at the wall. Tap the screen when the reticle is on the wall centre.');
+  const q = await pickWallWithXr();
+  if (q) {
+    arEngine.lockWallAnchor(arEngine.camToChar_m + arEngine.charToWall_m, q);
+    btnSetWall.textContent = '✓ Wall set';
+    btnSetWall.classList.add('on');
+    openDistModal();
+  }
+});
+
 document.getElementById('btn-capture').addEventListener('click', async () => {
+  if (arEngine) arEngine.forceRender();
+
   const flash = document.getElementById('flash');
   flash.style.opacity = '1';
   setTimeout(() => { flash.style.opacity = '0'; }, 100);
 
-  await new Promise(r => setTimeout(r, 80));
+  await new Promise(r => setTimeout(r, 120));
 
   const sessions = getSessions(activeProjectId);
   const session  = sessions?.find(s => s.id === activeSessionId);
